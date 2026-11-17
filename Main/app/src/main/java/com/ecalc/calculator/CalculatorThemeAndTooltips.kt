@@ -10,10 +10,8 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.RenderEffect
 import android.graphics.Shader
-import android.graphics.Typeface
 import android.text.Spannable
 import android.text.SpannableString
-import android.text.style.StyleSpan
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
@@ -43,6 +41,8 @@ import androidx.core.widget.CompoundButtonCompat
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentActivity
 import androidx.viewpager2.adapter.FragmentStateAdapter
+import com.ecalc.ui.ExactTypefaceSpan
+import com.ecalc.ui.PopupTypefaces
 import androidx.viewpager2.widget.ViewPager2
 import com.ecalc.databinding.ActivityMainBinding
 import kotlin.math.hypot
@@ -483,20 +483,26 @@ internal fun MainActivity.playExitSplashCollapse() {
 }
 
 
-fun MainActivity.showButtonPopup(anchor: View, text: String) {
+fun MainActivity.showButtonPopup(anchor: View, text: CharSequence) {
     keyPopupOverlay?.let { (it.parent as? FrameLayout)?.removeView(it) }; keyPopupOverlay = null
     val root = binding.rootFrame; val density = resources.displayMetrics.density
     val popupBg = if (isDarkMode) "#222528" else "#FFFFFF"
     val popupText = if (isDarkMode) "#E6EBF0" else "#2A2A2A"
     val strokeCol = if (isDarkMode) "#13959B" else "#E58A7B"
-    val formattedText = SpannableString(text).apply {
-        val dashIdx = text.indexOf(" — ")
-        if (dashIdx > 0) {
-            setSpan(StyleSpan(Typeface.BOLD), 0, dashIdx, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+    // Plain-text popups (key/tool tips) get the shared Inter emphasis: the label before
+    // the first " — " is SemiBold, the rest stays Regular. Pre-styled spannable popups
+    // (function docs) are used as-is; the bubble only sets the Inter base typeface.
+    val formattedText: CharSequence = if (text is String) {
+        SpannableString(text).apply {
+            val dashIdx = text.indexOf(" — ")
+            if (dashIdx > 0) {
+                setSpan(ExactTypefaceSpan(PopupTypefaces.semibold(this@showButtonPopup)), 0, dashIdx, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+            }
         }
-    }
+    } else text
     val bubble = TextView(this).apply {
         this.text = formattedText; textSize = 13f; setTextColor(Color.parseColor(popupText))
+        typeface = PopupTypefaces.regular(this@showButtonPopup)
         background = GradientDrawable().apply {
             shape = GradientDrawable.RECTANGLE
             cornerRadius = 12f * density

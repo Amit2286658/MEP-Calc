@@ -34,6 +34,8 @@ import android.widget.PopupWindow
 import android.widget.ScrollView
 import android.widget.TextView
 import kotlin.math.max
+import com.ecalc.ui.PopupTypefaces
+import com.ecalc.ui.styledLabelDesc
 
 internal fun MathCodeEditText.extractTypingPrefix(textStr: CharSequence, cursor: Int): Pair<String, IntRange>? {
     if (cursor <= 0 || cursor > textStr.length) return null
@@ -738,7 +740,7 @@ internal fun MathCodeEditText.showSuggestionDocPopup(anchorRow: View, item: Math
     val tvSig = TextView(context).apply {
         text = item.displayLabel
         setTextSize(TypedValue.COMPLEX_UNIT_SP, 11.8f)
-        typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
+        typeface = PopupTypefaces.medium(context)
         setTextColor(primaryText)
         setShadowLayer(2.5f * density, 0f, 1f * density, textShadowCol)
         // Multi-line enabled so long signatures never truncate
@@ -747,6 +749,7 @@ internal fun MathCodeEditText.showSuggestionDocPopup(anchorRow: View, item: Math
     val tvShort = TextView(context).apply {
         text = item.detail
         setTextSize(TypedValue.COMPLEX_UNIT_SP, 9.8f)
+        typeface = PopupTypefaces.semibold(context)
         setTextColor(strokeCol)
         setShadowLayer(2f * density, 0f, 1f * density, textShadowCol)
         isSingleLine = false
@@ -791,10 +794,33 @@ internal fun MathCodeEditText.showSuggestionDocPopup(anchorRow: View, item: Math
 
     fun makeBulletLine(bulletText: String, accentPrefix: Boolean = false): TextView {
         return TextView(context).apply {
-            text = "• $bulletText"
+            // "• label — description": label in bold-italic Inter, description after the
+            // dash in non-bold italic; both kept multi-line so nothing gets truncated.
+            val styled = styledLabelDesc(context, bulletText, prefix = "• ")
+            if (accentPrefix) {
+                val dashIdx = bulletText.indexOf(PopupTypefaces.DASH_SEP)
+                val labelEnd = if (dashIdx >= 0) {
+                    2 + dashIdx + PopupTypefaces.DASH_SEP.length
+                } else styled.length
+                styled.setSpan(
+                    ForegroundColorSpan(primaryText), 0, labelEnd.coerceAtMost(styled.length),
+                    Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
+                )
+                if (labelEnd < styled.length) {
+                    styled.setSpan(
+                        ForegroundColorSpan(secondaryText), labelEnd, styled.length,
+                        Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
+                    )
+                }
+            } else {
+                styled.setSpan(
+                    ForegroundColorSpan(secondaryText), 0, styled.length,
+                    Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
+                )
+            }
+            text = styled
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 10.4f)
-            typeface = Typeface.MONOSPACE
-            setTextColor(if (accentPrefix) primaryText else secondaryText)
+            typeface = PopupTypefaces.regular(context)
             setShadowLayer(2.2f * density, 0f, 1f * density, textShadowCol)
             // Full multi-line wrapping enabled so long parameter & return descriptions never get cut off
             isSingleLine = false
@@ -808,7 +834,7 @@ internal fun MathCodeEditText.showSuggestionDocPopup(anchorRow: View, item: Math
     val tvParamsHdr = TextView(context).apply {
         text = "PARAMETERS / OPERANDS (IN ORDER)"
         setTextSize(TypedValue.COMPLEX_UNIT_SP, 9f)
-        setTypeface(typeface, Typeface.BOLD)
+        typeface = PopupTypefaces.semibold(context)
         setTextColor(strokeCol)
         setShadowLayer(2f * density, 0f, 1f * density, textShadowCol)
         setPadding(0, 0, 0, dp(2f))
@@ -830,7 +856,7 @@ internal fun MathCodeEditText.showSuggestionDocPopup(anchorRow: View, item: Math
     val tvRetHdr = TextView(context).apply {
         text = "RETURNS"
         setTextSize(TypedValue.COMPLEX_UNIT_SP, 9f)
-        setTypeface(typeface, Typeface.BOLD)
+        typeface = PopupTypefaces.semibold(context)
         setTextColor(strokeCol)
         setShadowLayer(2f * density, 0f, 1f * density, textShadowCol)
         setPadding(0, 0, 0, dp(2f))
