@@ -11,6 +11,9 @@ import android.graphics.Color
 import android.graphics.RenderEffect
 import android.graphics.Shader
 import android.graphics.Typeface
+import android.text.Spannable
+import android.text.SpannableString
+import android.text.style.StyleSpan
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
@@ -46,11 +49,11 @@ import kotlin.math.hypot
 
 
 internal fun MainActivity.applyThemeColors(dark: Boolean) {
-    val displayBg   = if (dark) "#2D2D2D" else "#F8F8F8"
-    val sheetBg     = if (dark) "#333333" else "#F3F3F3"
-    val pillBg      = if (dark) "#262626" else "#EFEFEF"
-    val primaryText = if (dark) "#E0E0E0" else "#333333"
-    val secondaryText = if (dark) "#8E8E8E" else "#888888"
+    val displayBg   = if (dark) "#1E2022" else "#F8F8F8"
+    val sheetBg     = if (dark) "#25282B" else "#F3F3F3"
+    val pillBg      = if (dark) "#181A1C" else "#EFEFEF"
+    val primaryText = if (dark) "#E6EBF0" else "#333333"
+    val secondaryText = if (dark) "#8B95A0" else "#888888"
     val accentColor = if (dark) "#13959B" else "#F18977"
 
     window.statusBarColor = Color.parseColor(displayBg)
@@ -87,8 +90,24 @@ internal fun MainActivity.applyThemeColors(dark: Boolean) {
     val states = arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf(-android.R.attr.state_checked))
     CompoundButtonCompat.setButtonTintList(binding.cbMrToggle, ColorStateList(states, intArrayOf(Color.parseColor(accentColor), Color.parseColor(secondaryText))))
 
-    binding.tvMrHeaderLabel.setTextColor(Color.parseColor(if (dark) "#CCCCCC" else "#444444"))
-    binding.tvAngleMode.setTextColor(Color.parseColor(secondaryText))
+    binding.tvMrHeaderLabel.setTextColor(Color.parseColor(if (dark) "#D8DEE4" else "#444444"))
+    val pillStroke = Color.parseColor(if (dark) "#2E3338" else "#DCDCDC")
+    val pillRadius = 14f * resources.displayMetrics.density
+    val strokePx = (1f * resources.displayMetrics.density).toInt().coerceAtLeast(1)
+    binding.tvAngleMode.setTextColor(Color.parseColor(if (dark) "#C8D0D8" else "#555555"))
+    binding.tvAngleMode.background = GradientDrawable().apply {
+        shape = GradientDrawable.RECTANGLE
+        cornerRadius = pillRadius
+        setColor(Color.parseColor(pillBg))
+        setStroke(strokePx, pillStroke)
+    }
+    binding.tvStudioHint.setTextColor(Color.parseColor(accentColor))
+    binding.tvStudioHint.background = GradientDrawable().apply {
+        shape = GradientDrawable.RECTANGLE
+        cornerRadius = pillRadius
+        setColor(Color.parseColor(pillBg))
+        setStroke(strokePx, Color.parseColor(if (dark) "#26464A" else "#F2C5BC"))
+    }
     binding.tvPrimaryDisplay.setTextColor(Color.parseColor(primaryText))
     binding.tvSecondaryDisplay.setTextColor(Color.parseColor(secondaryText))
     binding.tvMrClusterTitle.setTextColor(Color.parseColor(secondaryText))
@@ -101,12 +120,6 @@ internal fun MainActivity.applyThemeColors(dark: Boolean) {
         cornerRadii = floatArrayOf(topRadius, topRadius, topRadius, topRadius, 0f, 0f, 0f, 0f)
         setColor(Color.parseColor(sheetBg))
     }
-
-    val tabIcons = listOf(
-        binding.ivTabHistory, binding.ivTabBasic,
-        binding.ivTabExtended, binding.ivTabTrig, binding.ivTabFx, binding.ivTabCatalog
-    )
-    tabIcons.forEach { it.setColorFilter(Color.parseColor(primaryText)) }
 
     updateTabIndicators()
 
@@ -127,6 +140,11 @@ internal fun MainActivity.updateTabIndicators(
     distance: Int = 1
 ) {
     val accentColor = if (isDarkMode) "#13959B" else "#E58A7B"
+    val inactiveIconColor = if (isDarkMode) "#E6EBF0" else "#333333"
+    val tabIcons = listOf(
+        binding.ivTabHistory, binding.ivTabBasic,
+        binding.ivTabExtended, binding.ivTabTrig, binding.ivTabFx, binding.ivTabCatalog
+    )
     val indicators = listOf(
         binding.indTabHistory, binding.indTabBasic,
         binding.indTabExtended, binding.indTabTrig, binding.indTabFx, binding.indTabCatalog
@@ -135,8 +153,23 @@ internal fun MainActivity.updateTabIndicators(
     val d = clampedDist.toFloat()
     val density = resources.displayMetrics.density
 
+    tabIcons.forEachIndexed { idx, icon ->
+        val isActive = (idx == selectedTabIndex)
+        icon.setColorFilter(Color.parseColor(if (isActive) accentColor else inactiveIconColor))
+        val targetAlpha = if (isActive) 1f else 0.55f
+        if (animate) {
+            icon.animate().alpha(targetAlpha).setDuration(220L).start()
+        } else {
+            icon.alpha = targetAlpha
+        }
+    }
+
     indicators.forEachIndexed { idx, view ->
-        view.setBackgroundColor(Color.parseColor(accentColor))
+        view.background = GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            cornerRadius = 1.5f * density
+            setColor(Color.parseColor(accentColor))
+        }
         if (idx == selectedTabIndex) {
             view.visibility = View.VISIBLE
             if (animate) {
@@ -453,11 +486,17 @@ internal fun MainActivity.playExitSplashCollapse() {
 fun MainActivity.showButtonPopup(anchor: View, text: String) {
     keyPopupOverlay?.let { (it.parent as? FrameLayout)?.removeView(it) }; keyPopupOverlay = null
     val root = binding.rootFrame; val density = resources.displayMetrics.density
-    val popupBg = if (isDarkMode) "#F8F8F8" else "#2E2E2E"
-    val popupText = if (isDarkMode) "#2D2D2D" else "#F2F2F2"
+    val popupBg = if (isDarkMode) "#222528" else "#FFFFFF"
+    val popupText = if (isDarkMode) "#E6EBF0" else "#2A2A2A"
     val strokeCol = if (isDarkMode) "#13959B" else "#E58A7B"
+    val formattedText = SpannableString(text).apply {
+        val dashIdx = text.indexOf(" — ")
+        if (dashIdx > 0) {
+            setSpan(StyleSpan(Typeface.BOLD), 0, dashIdx, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+        }
+    }
     val bubble = TextView(this).apply {
-        this.text = text; textSize = 13f; setTextColor(Color.parseColor(popupText))
+        this.text = formattedText; textSize = 13f; setTextColor(Color.parseColor(popupText))
         background = GradientDrawable().apply {
             shape = GradientDrawable.RECTANGLE
             cornerRadius = 12f * density

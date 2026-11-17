@@ -8,6 +8,7 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
+import android.graphics.Typeface
 import android.util.AttributeSet
 import android.util.LruCache
 import android.view.Gravity
@@ -16,9 +17,20 @@ import android.view.ViewConfiguration
 import androidx.appcompat.widget.AppCompatTextView
 
 /**
+ * Semantic key roles for visual hierarchy across the keypad.
+ */
+enum class KeyRole {
+    DIGIT,
+    OPERATOR,
+    UTILITY,
+    PRIMARY_EQUALS
+}
+
+/**
  * Custom View that implements realistic 3D Neumorphic styling for calculator keys.
- * Supports dual soft shadows (highlight and shade), pressed-in depth inversion,
- * disabled/greyed-out state, custom vector lens icon rendering, and adaptive dark/light theme palettes.
+ * Supports dual soft shadows (highlight and shade), 1px inner specular rim,
+ * tactile micro-press scale, KeyRole hierarchy, pressed-in depth inversion,
+ * disabled/greyed-out state, custom vector lens icon rendering, and adaptive dark/light palettes.
  */
 class NeumorphicKeyView @JvmOverloads constructor(
     context: Context,
@@ -27,7 +39,7 @@ class NeumorphicKeyView @JvmOverloads constructor(
 ) : AppCompatTextView(context, attrs, defStyleAttr) {
 
     companion object {
-        private val shadowBitmapCache = object : LruCache<String, Bitmap>(64) {
+        private val shadowBitmapCache = object : LruCache<String, Bitmap>(96) {
             override fun sizeOf(key: String, value: Bitmap): Int = 1
         }
     }
@@ -41,10 +53,25 @@ class NeumorphicKeyView @JvmOverloads constructor(
             }
         }
 
+    var keyRole: KeyRole = KeyRole.DIGIT
+        set(value) {
+            if (field != value) {
+                field = value
+                isAccentKey = (value == KeyRole.OPERATOR || value == KeyRole.PRIMARY_EQUALS)
+                updateColors()
+                invalidate()
+            }
+        }
+
     var isAccentKey: Boolean = false
         set(value) {
             if (field != value) {
                 field = value
+                if (value && keyRole == KeyRole.DIGIT) {
+                    keyRole = KeyRole.OPERATOR
+                } else if (!value && keyRole != KeyRole.DIGIT) {
+                    keyRole = KeyRole.DIGIT
+                }
                 updateColors()
                 invalidate()
             }
@@ -86,6 +113,9 @@ class NeumorphicKeyView @JvmOverloads constructor(
         }
     }
     private val surfacePaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val rimPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+    }
     private val lightShadowPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val darkShadowPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val bitmapPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
@@ -95,6 +125,7 @@ class NeumorphicKeyView @JvmOverloads constructor(
         strokeJoin = Paint.Join.ROUND
     }
     private val rectF = RectF()
+    private val rimRectF = RectF()
     private val outerRect = RectF()
     private val clipPath = Path()
 
@@ -133,32 +164,48 @@ class NeumorphicKeyView @JvmOverloads constructor(
 
         if (isDarkThemeMode) {
             val surface = when {
-                !isEnabled -> Color.parseColor("#2A2A2A")
-                isKeyPressed -> Color.parseColor("#2E2E2E")
-                else -> Color.parseColor("#333333")
+                !isEnabled -> Color.parseColor("#202326")
+                keyRole == KeyRole.PRIMARY_EQUALS && isKeyPressed -> Color.parseColor("#0F7E83")
+                keyRole == KeyRole.PRIMARY_EQUALS -> Color.parseColor("#13959B")
+                isKeyPressed -> Color.parseColor("#22262A")
+                else -> Color.parseColor("#282C30")
             }
-            val lightShadow = Color.parseColor("#3E3E3E")
-            val darkShadow = Color.parseColor("#212121")
+            val lightShadow = if (keyRole == KeyRole.PRIMARY_EQUALS) Color.parseColor("#22AAB0") else Color.parseColor("#32373C")
+            val darkShadow = Color.parseColor("#17191B")
             val txtColor = when {
-                !isEnabled -> Color.parseColor("#666666")
-                isAccentKey -> Color.parseColor("#2E8B90")
-                else -> Color.parseColor("#CCCCCC")
+                !isEnabled -> Color.parseColor("#5C636A")
+                keyRole == KeyRole.PRIMARY_EQUALS -> Color.parseColor("#FFFFFF")
+                keyRole == KeyRole.OPERATOR -> Color.parseColor("#2AB3B9")
+                keyRole == KeyRole.UTILITY -> Color.parseColor("#8FA0AD")
+                else -> Color.parseColor("#D8DEE4")
             }
+            rimPaint.color = if (keyRole == KeyRole.PRIMARY_EQUALS) Color.parseColor("#38FFFFFF") else Color.parseColor("#14FFFFFF")
             applyShadowColors(surface, lightShadow, darkShadow, txtColor)
         } else {
             val surface = when {
                 !isEnabled -> Color.parseColor("#E6E6E6")
+                keyRole == KeyRole.PRIMARY_EQUALS && isKeyPressed -> Color.parseColor("#DF7968")
+                keyRole == KeyRole.PRIMARY_EQUALS -> Color.parseColor("#E58A7B")
                 isKeyPressed -> Color.parseColor("#EAEAEA")
                 else -> Color.parseColor("#F3F3F3")
             }
-            val lightShadow = Color.parseColor("#FFFFFF")
-            val darkShadow = Color.parseColor("#D5D5D5")
+            val lightShadow = if (keyRole == KeyRole.PRIMARY_EQUALS) Color.parseColor("#F8ACA0") else Color.parseColor("#FFFFFF")
+            val darkShadow = if (keyRole == KeyRole.PRIMARY_EQUALS) Color.parseColor("#C97567") else Color.parseColor("#D5D5D5")
             val txtColor = when {
                 !isEnabled -> Color.parseColor("#9E9E9E")
-                isAccentKey -> Color.parseColor("#E58A7B")
-                else -> Color.parseColor("#444444")
+                keyRole == KeyRole.PRIMARY_EQUALS -> Color.parseColor("#FFFFFF")
+                keyRole == KeyRole.OPERATOR -> Color.parseColor("#E58A7B")
+                keyRole == KeyRole.UTILITY -> Color.parseColor("#6A7078")
+                else -> Color.parseColor("#333333")
             }
+            rimPaint.color = if (keyRole == KeyRole.PRIMARY_EQUALS) Color.parseColor("#44FFFFFF") else Color.parseColor("#55FFFFFF")
             applyShadowColors(surface, lightShadow, darkShadow, txtColor)
+        }
+
+        typeface = if (keyRole == KeyRole.PRIMARY_EQUALS) {
+            Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        } else {
+            Typeface.DEFAULT
         }
 
         if (isKeyPressed && isEnabled) {
@@ -193,7 +240,7 @@ class NeumorphicKeyView @JvmOverloads constructor(
 
     private fun getOrBuildShadowBitmap(w: Int, h: Int): Bitmap? {
         if (w <= 0 || h <= 0) return null
-        val cacheKey = "${w}x${h}:${if (isDarkThemeMode) 1 else 0}:${if (isAccentKey) 1 else 0}:${if (isKeyPressed) 1 else 0}:${if (isEnabled) 1 else 0}:$cornerRadiusDp:$shadowPadDp"
+        val cacheKey = "${w}x${h}:${if (isDarkThemeMode) 1 else 0}:${keyRole.ordinal}:${if (isKeyPressed) 1 else 0}:${if (isEnabled) 1 else 0}:$cornerRadiusDp:$shadowPadDp"
         shadowBitmapCache.get(cacheKey)?.let { cached ->
             if (!cached.isRecycled) return cached
         }
@@ -228,6 +275,14 @@ class NeumorphicKeyView @JvmOverloads constructor(
 
             surfacePaint.maskFilter = null
             offCanvas.drawRoundRect(rectF, radius, radius, surfacePaint)
+
+            if (isEnabled) {
+                rimPaint.strokeWidth = 1f * density
+                val inset = 0.5f * density
+                rimRectF.set(rectF.left + inset, rectF.top + inset, rectF.right - inset, rectF.bottom - inset)
+                offCanvas.drawRoundRect(rimRectF, (radius - inset).coerceAtLeast(0f), (radius - inset).coerceAtLeast(0f), rimPaint)
+            }
+
             offCanvas.restoreToCount(saveCount)
 
             shadowBitmapCache.put(cacheKey, bmp)
@@ -267,7 +322,6 @@ class NeumorphicKeyView @JvmOverloads constructor(
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
         if (!isEnabled || !isClickable) {
-            // Consume touch on disabled button without firing click or letting parent card intercept
             return true
         }
         when (event.actionMasked) {
@@ -276,6 +330,7 @@ class NeumorphicKeyView @JvmOverloads constructor(
                 longPressConsumed = false
                 updateColors()
                 invalidate()
+                animate().scaleX(0.96f).scaleY(0.96f).setDuration(55L).start()
                 postDelayed(longPressChecker, ViewConfiguration.getLongPressTimeout().toLong())
             }
             MotionEvent.ACTION_UP -> {
@@ -283,6 +338,7 @@ class NeumorphicKeyView @JvmOverloads constructor(
                 removeCallbacks(longPressChecker)
                 updateColors()
                 invalidate()
+                animate().scaleX(1f).scaleY(1f).setDuration(90L).start()
                 parent?.requestDisallowInterceptTouchEvent(false)
                 if (longPressConsumed) {
                     longPressConsumed = false
@@ -294,6 +350,7 @@ class NeumorphicKeyView @JvmOverloads constructor(
                 removeCallbacks(longPressChecker)
                 updateColors()
                 invalidate()
+                animate().scaleX(1f).scaleY(1f).setDuration(90L).start()
                 parent?.requestDisallowInterceptTouchEvent(false)
                 if (longPressConsumed) {
                     longPressConsumed = false

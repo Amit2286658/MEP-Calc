@@ -4,6 +4,8 @@ import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
 import android.animation.ValueAnimator
 import android.graphics.Color
+import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.util.TypedValue
 import android.view.Gravity
@@ -105,8 +107,11 @@ class HistoryFragment : Fragment() {
         header?.setTextColor(if (dark) Color.parseColor("#E0E0E0") else Color.parseColor("#333333"))
         clearButton?.isDarkThemeMode = dark
 
-        val textColor = if (dark) Color.parseColor("#E0E0E0") else Color.parseColor("#333333")
-        val subColor = if (dark) Color.parseColor("#8E8E8E") else Color.parseColor("#666666")
+        val textColor = if (dark) Color.parseColor("#E6EBF0") else Color.parseColor("#333333")
+        val subColor = if (dark) Color.parseColor("#8B95A0") else Color.parseColor("#666666")
+        val cardBg = if (dark) Color.parseColor("#2A2E32") else Color.parseColor("#EAEAEA")
+        val cardStroke = if (dark) Color.parseColor("#34393F") else Color.parseColor("#DCDCDC")
+        val density = resources.displayMetrics.density
 
         val lay = itemsLayout ?: return
         val ctx = context ?: return
@@ -125,20 +130,50 @@ class HistoryFragment : Fragment() {
             if (fadeInPlaceholder) springFadeInView(placeholder)
         } else {
             items.take(15).forEach { item ->
-                lay.addView(TextView(ctx).apply {
-                    text = item
-                    setTextColor(textColor)
-                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
-                    setPadding(12, 14, 12, 14)
+                val eqIdx = item.lastIndexOf('=')
+                val hasSplit = eqIdx > 0 && eqIdx < item.length - 1
+                val exprPart = if (hasSplit) item.substring(0, eqIdx).trim() else ""
+                val resultPart = if (hasSplit) "= " + item.substring(eqIdx + 1).trim() else item
+
+                val card = LinearLayout(ctx).apply {
+                    orientation = LinearLayout.VERTICAL
+                    background = GradientDrawable().apply {
+                        shape = GradientDrawable.RECTANGLE
+                        cornerRadius = 8f * density
+                        setColor(cardBg)
+                        setStroke((1f * density).toInt().coerceAtLeast(1), cardStroke)
+                    }
+                    setPadding((12 * density).toInt(), (9 * density).toInt(), (12 * density).toInt(), (9 * density).toInt())
+                    layoutParams = LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT
+                    ).apply { bottomMargin = (6 * density).toInt() }
                     isClickable = true
                     isFocusable = true
                     setOnClickListener {
                         activity.onHistoryItemClicked(item)
-                        // Acknowledge the placement on the item itself (no toast)
                         alpha = 0.45f
                         animate().alpha(1f).setDuration(240L).start()
                     }
+                }
+
+                if (hasSplit) {
+                    card.addView(TextView(ctx).apply {
+                        text = exprPart
+                        setTextColor(subColor)
+                        setTextSize(TypedValue.COMPLEX_UNIT_SP, 12.5f)
+                        fontFeatureSettings = "tnum"
+                        maxLines = 1
+                    })
+                }
+                card.addView(TextView(ctx).apply {
+                    text = resultPart
+                    setTextColor(textColor)
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+                    setTypeface(typeface, Typeface.BOLD)
+                    fontFeatureSettings = "tnum"
                 })
+                lay.addView(card)
             }
         }
     }

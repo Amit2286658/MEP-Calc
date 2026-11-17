@@ -14,7 +14,7 @@ import android.widget.GridLayout
 import androidx.fragment.app.Fragment
 import kotlin.math.hypot
 
-data class KeySpec(val label: String, val isAccent: Boolean)
+data class KeySpec(val label: String, val role: KeyRole)
 
 class KeyGridFragment : Fragment() {
 
@@ -26,35 +26,35 @@ class KeyGridFragment : Fragment() {
         }
 
         private val BASIC_KEYS = listOf(
-            KeySpec("AC", true), KeySpec("⌫", true), KeySpec("M+", true), KeySpec("M-", true),
-            KeySpec("7", false), KeySpec("8", false), KeySpec("9", false), KeySpec("x", true),
-            KeySpec("4", false), KeySpec("5", false), KeySpec("6", false), KeySpec("÷", true),
-            KeySpec("1", false), KeySpec("2", false), KeySpec("3", false), KeySpec("+", true),
-            KeySpec("0", false), KeySpec(".", false), KeySpec("-", true), KeySpec("=", true)
+            KeySpec("AC", KeyRole.UTILITY), KeySpec("⌫", KeyRole.UTILITY), KeySpec("M+", KeyRole.UTILITY), KeySpec("M-", KeyRole.UTILITY),
+            KeySpec("7", KeyRole.DIGIT), KeySpec("8", KeyRole.DIGIT), KeySpec("9", KeyRole.DIGIT), KeySpec("x", KeyRole.OPERATOR),
+            KeySpec("4", KeyRole.DIGIT), KeySpec("5", KeyRole.DIGIT), KeySpec("6", KeyRole.DIGIT), KeySpec("÷", KeyRole.OPERATOR),
+            KeySpec("1", KeyRole.DIGIT), KeySpec("2", KeyRole.DIGIT), KeySpec("3", KeyRole.DIGIT), KeySpec("+", KeyRole.OPERATOR),
+            KeySpec("0", KeyRole.DIGIT), KeySpec(".", KeyRole.DIGIT), KeySpec("-", KeyRole.OPERATOR), KeySpec("=", KeyRole.PRIMARY_EQUALS)
         )
 
         private val EXTENDED_KEYS = listOf(
-            KeySpec("(", true), KeySpec(")", true), KeySpec("%", true), KeySpec("^", true),
-            KeySpec("7", false), KeySpec("8", false), KeySpec("9", false), KeySpec("√", true),
-            KeySpec("4", false), KeySpec("5", false), KeySpec("6", false), KeySpec("ⁿ√", true),
-            KeySpec("1", false), KeySpec("2", false), KeySpec("3", false), KeySpec("!", true),
-            KeySpec("0", false), KeySpec(".", false), KeySpec("EE", true), KeySpec("=", true)
+            KeySpec("(", KeyRole.UTILITY), KeySpec(")", KeyRole.UTILITY), KeySpec("%", KeyRole.OPERATOR), KeySpec("^", KeyRole.OPERATOR),
+            KeySpec("7", KeyRole.DIGIT), KeySpec("8", KeyRole.DIGIT), KeySpec("9", KeyRole.DIGIT), KeySpec("√", KeyRole.OPERATOR),
+            KeySpec("4", KeyRole.DIGIT), KeySpec("5", KeyRole.DIGIT), KeySpec("6", KeyRole.DIGIT), KeySpec("ⁿ√", KeyRole.OPERATOR),
+            KeySpec("1", KeyRole.DIGIT), KeySpec("2", KeyRole.DIGIT), KeySpec("3", KeyRole.DIGIT), KeySpec("!", KeyRole.OPERATOR),
+            KeySpec("0", KeyRole.DIGIT), KeySpec(".", KeyRole.DIGIT), KeySpec("EE", KeyRole.UTILITY), KeySpec("=", KeyRole.PRIMARY_EQUALS)
         )
 
         private val TRIG_KEYS = listOf(
-            KeySpec("sin", true), KeySpec("cos", true), KeySpec("tan", true), KeySpec("π", true),
-            KeySpec("asin", true), KeySpec("acos", true), KeySpec("atan", true), KeySpec("e", true),
-            KeySpec("sec", true), KeySpec("cosec", true), KeySpec("cot", true), KeySpec("ln", true),
-            KeySpec("asec", true), KeySpec("acosec", true), KeySpec("acot", true), KeySpec("1/x", true),
-            KeySpec("sinh", true), KeySpec("cosh", true), KeySpec("tanh", true), KeySpec("=", true)
+            KeySpec("sin", KeyRole.DIGIT), KeySpec("cos", KeyRole.DIGIT), KeySpec("tan", KeyRole.DIGIT), KeySpec("π", KeyRole.OPERATOR),
+            KeySpec("asin", KeyRole.DIGIT), KeySpec("acos", KeyRole.DIGIT), KeySpec("atan", KeyRole.DIGIT), KeySpec("e", KeyRole.OPERATOR),
+            KeySpec("sec", KeyRole.DIGIT), KeySpec("cosec", KeyRole.DIGIT), KeySpec("cot", KeyRole.DIGIT), KeySpec("ln", KeyRole.UTILITY),
+            KeySpec("asec", KeyRole.DIGIT), KeySpec("acosec", KeyRole.DIGIT), KeySpec("acot", KeyRole.DIGIT), KeySpec("1/x", KeyRole.UTILITY),
+            KeySpec("sinh", KeyRole.DIGIT), KeySpec("cosh", KeyRole.DIGIT), KeySpec("tanh", KeyRole.DIGIT), KeySpec("=", KeyRole.PRIMARY_EQUALS)
         )
 
         private val FX_KEYS = listOf(
-            KeySpec("abs", true), KeySpec("log", true), KeySpec("log₂", true), KeySpec("round", true),
-            KeySpec("x²", true), KeySpec("x³", true), KeySpec("xʸ", true), KeySpec("10ˣ", true),
-            KeySpec("eˣ", true), KeySpec("nPr", true), KeySpec("nCr", true), KeySpec("cbrt", true),
-            KeySpec("ceil", true), KeySpec("floor", true), KeySpec("rand", true), KeySpec(",", true),
-            KeySpec("gcd", true), KeySpec("lcm", true), KeySpec("Ans", true), KeySpec("=", true)
+            KeySpec("abs", KeyRole.DIGIT), KeySpec("log", KeyRole.DIGIT), KeySpec("log₂", KeyRole.DIGIT), KeySpec("round", KeyRole.UTILITY),
+            KeySpec("x²", KeyRole.DIGIT), KeySpec("x³", KeyRole.DIGIT), KeySpec("xʸ", KeyRole.DIGIT), KeySpec("10ˣ", KeyRole.DIGIT),
+            KeySpec("eˣ", KeyRole.DIGIT), KeySpec("nPr", KeyRole.DIGIT), KeySpec("nCr", KeyRole.DIGIT), KeySpec("cbrt", KeyRole.DIGIT),
+            KeySpec("ceil", KeyRole.UTILITY), KeySpec("floor", KeyRole.UTILITY), KeySpec("rand", KeyRole.UTILITY), KeySpec(",", KeyRole.UTILITY),
+            KeySpec("gcd", KeyRole.DIGIT), KeySpec("lcm", KeyRole.DIGIT), KeySpec("Ans", KeyRole.OPERATOR), KeySpec("=", KeyRole.PRIMARY_EQUALS)
         )
     }
 
@@ -83,7 +83,7 @@ class KeyGridFragment : Fragment() {
         specs.forEachIndexed { index, spec ->
             val keyView = NeumorphicKeyView(requireContext()).apply {
                 text = spec.label; contentDescription = spec.label
-                isAccentKey = spec.isAccent; isDarkThemeMode = activity.isDarkMode
+                keyRole = spec.role; isDarkThemeMode = activity.isDarkMode
                 cornerRadiusDp = 8f
                 setOnClickListener {
                     activity.onKeyClicked(spec.label)

@@ -819,6 +819,12 @@ class MainActivity : AppCompatActivity() {
             displaySpringPulse(binding.tvAngleMode, 0.05f)
         }
 
+        bindHoldPopup(binding.tvStudioHint, ".math Studio — taps open the full multi-file .math code editor, plotter, and session manager (you can also swipe left anywhere on the display).")
+        binding.tvStudioHint.setOnClickListener {
+            displaySpringPulse(binding.tvStudioHint, 0.06f)
+            switchWorkspacePage(1)
+        }
+
         binding.tvMrValue.setOnClickListener {
             val recalled = formatValue(memoryValue)
             currentPrimaryInput = recalled

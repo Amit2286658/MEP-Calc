@@ -158,24 +158,49 @@
                 </FrameLayout>
             </LinearLayout>
 
-            <!-- Angle Mode indicator (deg / rad) -->
+            <!-- Angle Mode pill indicator (deg / rad) -->
             <TextView
                 android:id="@+id/tvAngleMode"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="24dp"
+                android:layout_marginTop="22dp"
+                android:paddingStart="12dp"
+                android:paddingEnd="12dp"
+                android:paddingTop="5dp"
+                android:paddingBottom="5dp"
                 android:text="@string/angle_mode_deg"
-                android:textColor="#888888"
-                android:textSize="15sp"
+                android:textColor="#666666"
+                android:textSize="12.5sp"
+                android:textStyle="bold"
                 android:clickable="true"
                 android:focusable="true"
                 app:layout_constraintTop_toBottomOf="@id/themeTogglePill"
                 app:layout_constraintStart_toStartOf="parent" />
 
+            <!-- Subtle Studio swipe/tap affordance -->
+            <TextView
+                android:id="@+id/tvStudioHint"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:paddingStart="12dp"
+                android:paddingEnd="12dp"
+                android:paddingTop="5dp"
+                android:paddingBottom="5dp"
+                android:text="Studio ›"
+                android:textColor="#666666"
+                android:textSize="12.5sp"
+                android:textStyle="bold"
+                android:clickable="true"
+                android:focusable="true"
+                app:layout_constraintTop_toTopOf="@id/tvAngleMode"
+                app:layout_constraintBottom_toBottomOf="@id/tvAngleMode"
+                app:layout_constraintEnd_toEndOf="parent" />
+
             <!-- Primary display — height tracks the section so tiny free-form
                  windows shrink it instead of letting it overlap the MR row -->
             <TextView
                 android:id="@+id/tvPrimaryDisplay"
+                android:fontFeatureSettings="tnum"
                 android:layout_width="0dp"
                 android:layout_height="0dp"
                 android:layout_marginTop="22dp"
@@ -200,6 +225,7 @@
                  glyphs with the 42sp primary display above -->
             <TextView
                 android:id="@+id/tvSecondaryDisplay"
+                android:fontFeatureSettings="tnum"
                 android:layout_width="0dp"
                 android:layout_height="0dp"
                 android:layout_marginTop="10dp"
@@ -255,6 +281,7 @@
 
                 <TextView
                     android:id="@+id/tvMrValue"
+                android:fontFeatureSettings="tnum"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="4dp"

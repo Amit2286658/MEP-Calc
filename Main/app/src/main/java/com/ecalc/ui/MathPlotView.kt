@@ -609,6 +609,7 @@ class MathPlotView(context: Context) : View(context) {
                 val by = max(plotTop() + (if (seriesList.size > 1) 22f else 6f) * density, sy - 28f * density)
                 badgeRect.set(bx, by, bx + tw + 2f * padH, by + 18f * density + padV)
                 canvas.drawRoundRect(badgeRect, 8f * density, 8f * density, badgeBgPaint)
+                canvas.drawRoundRect(badgeRect, 8f * density, 8f * density, borderPaint)
                 canvas.drawText(text, bx + padH, by + 13.5f * density, badgeTextPaint)
             }
         } else {
