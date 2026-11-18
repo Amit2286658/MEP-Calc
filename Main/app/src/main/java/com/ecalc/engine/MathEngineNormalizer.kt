@@ -674,12 +674,32 @@ fun MathEngineManager.evaluateCurrencyConversion(
     val normTo = CurrencyConverter.normalizeCurrencyCode(toCode)
     val cleanAmount = amountExpr.trim().ifBlank { "1" }
     val innerExpr = toEngineSyntax(cleanAmount, isDegreeMode, lastAnswer)
-    val engineCall = "@currency_convert(\"$normFrom\", \"$normTo\", ($innerExpr))"
+    val engineCall = "currency_convert(($innerExpr), \"$normFrom\", \"$normTo\")"
+    val unitTag = normTo.lowercase(java.util.Locale.US)
     evaluate(engineCall, isDegreeMode, lastAnswer) { outcome ->
         if (outcome.ok) {
-            onDone(outcome.copy(unit = normTo.lowercase(java.util.Locale.US)))
+            onDone(outcome.copy(unit = unitTag))
         } else {
-            onDone(outcome)
+            // Fallback if currency_convert wrapper is not yet linked: evaluate the numeric expression
+            // via the C11 Math Engine and convert using CurrencyConverter's live/cached rate table.
+            evaluate(cleanAmount, isDegreeMode, lastAnswer) { amtOutcome ->
+                if (amtOutcome.ok) {
+                    val amtVal = amtOutcome.value.trim().split(Regex("\\s+")).firstOrNull()?.toDoubleOrNull()
+                    val converted = if (amtVal != null) CurrencyConverter.convert(amtVal, normFrom, normTo) else Double.NaN
+                    if (!converted.isNaN() && !converted.isInfinite()) {
+                        val formatted = if (converted % 1.0 == 0.0 && kotlin.math.abs(converted) < 1e15) {
+                            "${converted.toLong()}"
+                        } else {
+                            String.format(java.util.Locale.US, "%.6g", converted)
+                        }
+                        onDone(EvalOutcome(true, formatted, "real", unitTag, null, stdout = amtOutcome.stdout))
+                    } else {
+                        onDone(outcome)
+                    }
+                } else {
+                    onDone(amtOutcome)
+                }
+            }
         }
     }
 }

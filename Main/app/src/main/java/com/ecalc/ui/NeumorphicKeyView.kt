@@ -69,7 +69,7 @@ class NeumorphicKeyView @JvmOverloads constructor(
                 field = value
                 if (value && keyRole == KeyRole.DIGIT) {
                     keyRole = KeyRole.OPERATOR
-                } else if (!value && keyRole != KeyRole.DIGIT) {
+                } else if (!value && (keyRole == KeyRole.OPERATOR || keyRole == KeyRole.PRIMARY_EQUALS)) {
                     keyRole = KeyRole.DIGIT
                 }
                 updateColors()

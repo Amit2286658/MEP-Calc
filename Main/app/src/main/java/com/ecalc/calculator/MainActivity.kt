@@ -177,7 +177,7 @@ class MainActivity : AppCompatActivity() {
                     binding.rootFrame.post {
                         if (!isFinishing && !isDestroyed) {
                             ensureWorkspaceFragment()?.applyTheme(isDarkMode)
-                            binding.viewPager.offscreenPageLimit = 5
+                            binding.viewPager.offscreenPageLimit = 6
                             splashUiSetupDone = true
                             triggerLaunchSplashIfReady()
                         }
@@ -629,6 +629,7 @@ class MainActivity : AppCompatActivity() {
                 is KeyGridFragment -> frag.springSettle(direction, clampedDist)
                 is HistoryFragment -> frag.springSettle(direction, clampedDist)
                 is FunctionCatalogFragment -> frag.springSettle(direction, clampedDist)
+                is CurrencyFragment -> frag.springSettle(direction, clampedDist)
                 else -> if (attempt < 4) {
                     binding.viewPager.postDelayed({ invokeFragmentSpring(attempt + 1) }, 24L)
                 }
@@ -880,7 +881,7 @@ class MainActivity : AppCompatActivity() {
             binding.tabHistory, binding.tabBasic, binding.tabExtended,
             binding.tabTrig, binding.tabFx, binding.tabCatalog, binding.tabCurrency
         )
-        val tabNames = listOf("History", "Basic keypad", "Extended keypad", "Trig", "Fx", "Catalog")
+        val tabNames = listOf("History", "Basic keypad", "Extended keypad", "Trig", "Fx", "Catalog", "Currency")
 
         tabViews.forEachIndexed { idx, tab ->
             tab.setOnClickListener {
@@ -891,7 +892,7 @@ class MainActivity : AppCompatActivity() {
                     binding.viewPager.setCurrentItem(idx, true)
                 }
             }
-            bindHoldPopup(tab, tabDescriptionFor(tabNames[idx]))
+            bindHoldPopup(tab, tabDescriptionFor(tabNames.getOrElse(idx) { "Currency" }))
         }
     }
 

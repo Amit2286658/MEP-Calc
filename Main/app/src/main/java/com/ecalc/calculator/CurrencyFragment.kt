@@ -582,7 +582,7 @@ class CurrencyFragment : Fragment() {
             override fun afterTextChanged(s: Editable?) {}
         })
 
-        val modalW = (root.width - dp(32f)).coerceIn(dp(260f), dp(420f))
+        val modalW = minOf(root.width - dp(32f), dp(420f)).coerceAtLeast(dp(240f))
         val modalH = (root.height * 0.72f).toInt().coerceAtLeast(dp(340f))
         overlay.addView(modal, FrameLayout.LayoutParams(modalW, modalH, Gravity.CENTER))
         root.addView(overlay, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
@@ -604,6 +604,53 @@ class CurrencyFragment : Fragment() {
             (overlay.parent as? FrameLayout)?.removeView(overlay)
         }
         pickerOverlay = null
+    }
+
+    fun springSettle(fromDirection: Int, distance: Int = 1) {
+        val v = mainContent ?: view ?: return
+        if (v.width == 0 || v.height == 0) {
+            v.post {
+                if (isAdded && view != null) {
+                    springSettle(fromDirection, distance)
+                }
+            }
+            return
+        }
+        wobbleAnimators.forEach { it.cancel() }
+        wobbleAnimators.clear()
+
+        val clampedDist = distance.coerceIn(1, 4)
+        val d = clampedDist.toFloat()
+        val density = resources.displayMetrics.density
+        val slidePx = (14f + (d - 1f) * 14f) * density * fromDirection
+        val scaleAmp = 0.025f + (d - 1f) * 0.025f
+        val settleDuration = 440L + (clampedDist - 1) * 50L
+
+        v.setLayerType(View.LAYER_TYPE_HARDWARE, null)
+        ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = settleDuration
+            interpolator = LinearInterpolator()
+            addUpdateListener { anim ->
+                val f = anim.animatedValue as Float
+                val t = f * 0.48
+                val decay = Math.exp(-7.5 * t)
+                val pulse = (decay * Math.sin(t * 22.0)).toFloat()
+                val springX = (decay * (Math.cos(t * 22.0) + (7.5 / 22.0) * Math.sin(t * 22.0))).toFloat()
+                v.translationX = slidePx * springX * 0.45f
+                v.scaleX = 1f + scaleAmp * pulse
+                v.scaleY = 1f + scaleAmp * pulse
+            }
+            addListener(object : AnimatorListenerAdapter() {
+                override fun onAnimationEnd(animation: Animator) {
+                    v.translationX = 0f
+                    v.scaleX = 1f
+                    v.scaleY = 1f
+                    v.setLayerType(View.LAYER_TYPE_NONE, null)
+                }
+            })
+            start()
+            wobbleAnimators.add(this)
+        }
     }
 
     fun wobbleRound(cx: Float, cy: Float, maxRadius: Float, revealDurationMs: Long) {

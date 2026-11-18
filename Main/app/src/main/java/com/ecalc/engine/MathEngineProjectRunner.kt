@@ -705,11 +705,11 @@ internal fun MathEngineManager.ensureModuleDeclarationsLinkedSync(
  */
 fun MathEngineManager.ensureDefaultProject1Seeded(ctx: Context): File {
     val fastModDir = getProjectDir(ctx, DEFAULT_STUDIO_PROJECT_NAME)
-    if (defaultProject1Seeded && File(fastModDir, ".seeded_unified_modules_v11").exists()) {
+    if (defaultProject1Seeded && File(fastModDir, ".seeded_unified_modules_v12").exists()) {
         return fastModDir
     }
     return synchronized(projectFsLock) {
-        if (defaultProject1Seeded && File(fastModDir, ".seeded_unified_modules_v11").exists()) {
+        if (defaultProject1Seeded && File(fastModDir, ".seeded_unified_modules_v12").exists()) {
             return@synchronized fastModDir
         }
         val legDir = File(ctx.filesDir, "math_programs").also { if (!it.exists()) it.mkdirs() }
@@ -764,7 +764,7 @@ fun MathEngineManager.ensureDefaultProject1Seeded(ctx: Context): File {
             }
     }
 
-    val seedMarker = File(modDir, ".seeded_unified_modules_v11")
+    val seedMarker = File(modDir, ".seeded_unified_modules_v12")
     if (!seedMarker.exists()) {
         val oldV9Marker = File(modDir, ".seeded_unified_modules_v9")
         if (!oldV9Marker.exists()) {
@@ -857,7 +857,7 @@ fun MathEngineManager.ensureDefaultProject1Seeded(ctx: Context): File {
             )
         }
         val customOpsFile = File(modDir, "custom_ops.math")
-        if (!customOpsFile.exists() || !customOpsFile.readText().contains("# @desc")) {
+        if (!customOpsFile.exists() || !customOpsFile.readText().contains("# @desc") || !customOpsFile.readText().contains("currency_convert(")) {
             customOpsFile.writeText(
                 "# Unified Library & Executable Module: custom_ops.math\n" +
                 "# Linked with Basic Calculator & imported via <[custom_ops] in Studio.\n\n" +
@@ -882,6 +882,7 @@ fun MathEngineManager.ensureDefaultProject1Seeded(ctx: Context): File {
                 "# @param x: real — Angle x measured in degrees (°)\n" +
                 "# @return real — Sine of x° in [−1, 1]\n" +
                 "pub deg_sin(x: real) = sin(deg_to_r(x))\n\n" +
+                "pub currency_convert(amount: real, from_code: str, to_code: str) = @currency_convert(from_code, to_code, amount)\n\n" +
                 "# @desc Custom infix operator `a par b` in [custom_ops] (precedence :<55) computing the parallel combination (a · b) / (a + b) of two resistances, impedances, or spring constants. Formula: (a) \"par\" (b) = (a · b) / (a + b)\n" +
                 "# @param a: real — Left operand (e.g. first parallel resistance R₁ or stiffness k₁)\n" +
                 "# @param b: real — Right operand (e.g. second parallel resistance R₂ or stiffness k₂)\n" +

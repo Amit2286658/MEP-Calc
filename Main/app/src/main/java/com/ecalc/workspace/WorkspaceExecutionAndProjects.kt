@@ -904,7 +904,7 @@ internal fun MathWorkspaceFragment.showDrawerFileSearch(anchor: View) {
             val rowLoc = IntArray(2)
             row.getLocationInWindow(rowLoc)
             val tLeft = (rowLoc[0] - rootLoc[0]).coerceIn(dp(8f), (rootW - dp(120f)).coerceAtLeast(dp(8f)))
-            val tWidth = row.width.coerceIn(dp(180f), rootW - tLeft - dp(8f))
+            val tWidth = row.width.coerceIn(dp(180f), (rootW - tLeft - dp(8f)).coerceAtLeast(dp(180f)))
             val tTop = (rowLoc[1] - rootLoc[1]).coerceAtLeast(dp(42f))
             Triple(tLeft, tWidth, tTop)
         } else {
@@ -918,7 +918,7 @@ internal fun MathWorkspaceFragment.showDrawerFileSearch(anchor: View) {
         val imeBottom = computeImeBottomPx()
         lastKnownImeBottom = imeBottom
 
-        val visibleBottom = (rootH - imeBottom - dp(8f)).coerceIn(dp(150f), rootH - dp(8f))
+        val visibleBottom = (rootH - imeBottom - dp(8f)).coerceIn(dp(150f), (rootH - dp(8f)).coerceAtLeast(dp(150f)))
         val minTopLimit = dp(42f)
         val barH = dp(36f)
         val gap = dp(6f)

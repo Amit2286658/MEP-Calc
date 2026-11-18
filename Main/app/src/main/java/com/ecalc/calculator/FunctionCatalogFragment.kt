@@ -725,7 +725,7 @@ class FunctionCatalogFragment : Fragment() {
                 val rowLoc = IntArray(2)
                 row.getLocationInWindow(rowLoc)
                 val tLeft = (rowLoc[0] - rootLoc[0]).coerceIn(dp(8f), (rootW - dp(80f)).coerceAtLeast(dp(8f)))
-                val tWidth = row.width.coerceIn(dp(160f), rootW - tLeft - dp(8f))
+                val tWidth = row.width.coerceIn(dp(160f), (rootW - tLeft - dp(8f)).coerceAtLeast(dp(160f)))
                 val tTop = (rowLoc[1] - rootLoc[1]).coerceAtLeast(dp(44f))
                 Triple(tLeft, tWidth, tTop)
             } else {
@@ -743,7 +743,7 @@ class FunctionCatalogFragment : Fragment() {
             lastKnownImeBottom = imeBottom
 
             // Visible bottom strictly above the virtual keyboard
-            val visibleBottom = (rootH - imeBottom - dp(8f)).coerceIn(dp(150f), rootH - dp(8f))
+            val visibleBottom = (rootH - imeBottom - dp(8f)).coerceIn(dp(150f), (rootH - dp(8f)).coerceAtLeast(dp(150f)))
 
             // Keep calculator primary/secondary display visible when possible, but ALWAYS prioritize
             // keeping the search bar and suggestions strictly above the virtual keyboard!
@@ -770,7 +770,7 @@ class FunctionCatalogFragment : Fragment() {
 
             // Ensure searchBarCard + suggestionsPanel never extend below visibleBottom (never hidden behind virtual keyboard)
             val desiredBarTop = if (imeBottom > dp(48f)) {
-                minOf(naturalRowTop, visibleBottom - totalNeeded).coerceIn(minTopLimit, (visibleBottom - barH - dp(4f)).coerceAtLeast(dp(36f)))
+                minOf(naturalRowTop, visibleBottom - totalNeeded).coerceIn(minTopLimit, (visibleBottom - barH - dp(4f)).coerceAtLeast(minTopLimit))
             } else {
                 minOf(naturalRowTop, visibleBottom - totalNeeded).coerceAtLeast(minTopLimit)
             }

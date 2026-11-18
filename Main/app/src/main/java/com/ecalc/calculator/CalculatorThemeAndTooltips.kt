@@ -642,6 +642,8 @@ internal fun MainActivity.tabDescriptionFor(name: String): String = when (name) 
         "combinatorics (nPr, nCr), gcd / lcm, round / ceil / floor, rand, the parameter separator comma (,), and Ans recall."
     "Catalog" -> "Functions Catalog (stdlib + patches + project1) — live-synced list of all functions, custom/overloaded operators, " +
         "and constants from stdlib, global .math patches, and project1. Tap any item to insert it into the expression; hold any item to view its frosted popup info window."
+    "Currency" -> "Currency Converter (From → To) — converts between 55+ global currencies using the C11 Math Engine " +
+        "and live/cached exchange rates. Tap From or To to search currencies, or tap = to evaluate and record to History."
     else -> "$name — open this tab"
 }
 
