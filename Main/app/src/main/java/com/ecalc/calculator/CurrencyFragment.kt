@@ -54,9 +54,9 @@ class CurrencyFragment : Fragment() {
     private var tvToCode: TextView? = null
     private var tvToName: TextView? = null
 
-    private var previewCard: LinearLayout? = null
-    private var tvPreviewExpr: TextView? = null
-    private var tvPreviewResult: TextView? = null
+    private var exprCard: LinearLayout? = null
+    private var tvExpr: TextView? = null
+    private var tvResult: TextView? = null
 
     private val quickKeys = mutableListOf<NeumorphicKeyView>()
     private var btnEquals: NeumorphicKeyView? = null
@@ -609,8 +609,6 @@ class CurrencyFragment : Fragment() {
         root.addView(overlay, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         pickerOverlay = overlay
     }
-
-    fun springSettle(direction: Int, distance: Int) { }
 
     fun handleBackPressed(): Boolean {
         if (pickerOverlay != null) {
