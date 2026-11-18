@@ -674,7 +674,7 @@ fun MathEngineManager.evaluateCurrencyConversion(
     val normTo = CurrencyConverter.normalizeCurrencyCode(toCode)
     val cleanAmount = amountExpr.trim().ifBlank { "1" }
     val innerExpr = toEngineSyntax(cleanAmount, isDegreeMode, lastAnswer)
-    val engineCall = "@currency_convert("$normFrom", "$normTo", ($innerExpr))"
+    val engineCall = "@currency_convert(\"$normFrom\", \"$normTo\", ($innerExpr))"
     evaluate(engineCall, isDegreeMode, lastAnswer) { outcome ->
         if (outcome.ok) {
             onDone(outcome.copy(unit = normTo.lowercase(java.util.Locale.US)))
