@@ -196,7 +196,7 @@ class MainActivity : AppCompatActivity() {
                 when {
                     aboutOverlay != null -> dismissAboutInfoWindow()
                     currentWorkspacePage == 0 && (fragmentAt(5) as? FunctionCatalogFragment)?.handleBackPressed() == true -> Unit
-                    currentWorkspacePage == 0 && (fragmentAt(6) as? CurrencyFragment)?.handleBackPressed() == true -> Unit
+                    currentWorkspacePage == 0 && (fragmentAt(5) as? CurrencyFragment)?.handleBackPressed() == true -> Unit
                     currentWorkspacePage == 1 && workspaceFragment?.handleBackPressed() == true -> Unit
                     currentWorkspacePage == 1 -> switchWorkspacePage(0)
                     else -> playExitSplashCollapse()
@@ -508,11 +508,11 @@ class MainActivity : AppCompatActivity() {
 
                 val tabs = listOf(
                     binding.tabHistory, binding.tabBasic, binding.tabExtended,
-                    binding.tabTrig, binding.tabFx, binding.tabCatalog, binding.tabCurrency
+                    binding.tabTrig, binding.tabFx, binding.tabCurrency, binding.tabCatalog
                 )
                 val tab = tabs[position]
                 tabSpringPulse(tab, direction, distance)
-                if (position == 6) (fragmentAt(6) as? CurrencyFragment)?.updatePreviewAndRate()
+                if (position == 5) (fragmentAt(5) as? CurrencyFragment)?.updatePreviewAndRate()
 
                 binding.tabScroll.post {
                     val density = resources.displayMetrics.density
@@ -630,6 +630,7 @@ class MainActivity : AppCompatActivity() {
                 is HistoryFragment -> frag.springSettle(direction, clampedDist)
                 is FunctionCatalogFragment -> frag.springSettle(direction, clampedDist)
                 is CurrencyFragment -> frag.springSettle(direction, clampedDist)
+                is CurrencyFragment -> frag.springSettle(direction, clampedDist)
                 else -> if (attempt < 4) {
                     binding.viewPager.postDelayed({ invokeFragmentSpring(attempt + 1) }, 24L)
                 }
@@ -687,8 +688,8 @@ class MainActivity : AppCompatActivity() {
         override fun getItemCount(): Int = 7
         override fun createFragment(position: Int): Fragment = when (position) {
             0 -> HistoryFragment()
-            5 -> FunctionCatalogFragment()
-            6 -> CurrencyFragment()
+            5 -> CurrencyFragment()
+            6 -> FunctionCatalogFragment()
             else -> KeyGridFragment.newInstance(position)
         }
     }

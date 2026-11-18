@@ -66,7 +66,8 @@ class CurrencyFragment : Fragment() {
 
     private var fromCode: String = "USD"
     private var toCode: String = "INR"
-    private var customAmountExpr: String? = null
+    private var amountBuffer: String = ""
+    private var exprCard: LinearLayout? = null
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -182,8 +183,8 @@ class CurrencyFragment : Fragment() {
         pairRow.addView(toCard, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         content.addView(pairRow)
 
-        // 3. Live Conversion Preview Card
-        previewCard = LinearLayout(ctx).apply {
+        // 3. Expression Display Card (pseudo convert_fx(from, to, amount))
+        exprCard = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(12f), dp(10f), dp(12f), dp(10f))
             layoutParams = LinearLayout.LayoutParams(
@@ -191,12 +192,13 @@ class CurrencyFragment : Fragment() {
                 LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply { bottomMargin = dp(8f) }
         }
-        tvPreviewExpr = TextView(ctx).apply {
-            textSize = 12.5f
+        tvExpr = TextView(ctx).apply {
+            textSize = 14.5f
+            typeface = Typeface.create(Typeface.MONOSPACE, Typeface.NORMAL)
             fontFeatureSettings = "tnum"
-            maxLines = 1
+            maxLines = 2
         }
-        tvPreviewResult = TextView(ctx).apply {
+        tvResult = TextView(ctx).apply {
             textSize = 20f
             setTypeface(typeface, Typeface.BOLD)
             fontFeatureSettings = "tnum"
@@ -206,13 +208,13 @@ class CurrencyFragment : Fragment() {
                 LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply { topMargin = dp(2f) }
         }
-        previewCard?.addView(tvPreviewExpr)
-        previewCard?.addView(tvPreviewResult)
-        content.addView(previewCard)
+        exprCard?.addView(tvExpr)
+        exprCard?.addView(tvResult)
+        content.addView(exprCard)
 
-        // 4. Quick Presets & Convert Action Grid
-        val actionRow = LinearLayout(ctx).apply {
-            orientation = LinearLayout.HORIZONTAL
+        // 4. Micro Keypad for entering the amount
+        val keyGrid = LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 0,
@@ -220,47 +222,69 @@ class CurrencyFragment : Fragment() {
             )
         }
         quickKeys.clear()
-        val presets = listOf("1" to "1", "10" to "10", "100" to "100", "1K" to "1000", "Disp" to "DISP")
-        presets.forEach { (label, value) ->
-            val role = if (value == "DISP") KeyRole.UTILITY else KeyRole.DIGIT
-            val btn = NeumorphicKeyView(ctx).apply {
-                text = label
-                textSize = if (value == "DISP") 13.5f else 15.5f
-                keyRole = role
-                cornerRadiusDp = 10f
-                isDarkThemeMode = activity.isDarkMode
-                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f)
-                setOnClickListener {
-                    customAmountExpr = if (value == "DISP") null else value
-                    updatePreviewAndRate()
-                    if (value != "DISP") {
-                        runEngineConversion(activity)
+        val rows = listOf(
+            listOf("7", "8", "9", "\u232B"),
+            listOf("4", "5", "6", "."),
+            listOf("1", "2", "3", "0"),
+            listOf("AC", "=", "", "")
+        )
+        for (row in rows) {
+            val rowLl = LinearLayout(ctx).apply {
+                orientation = LinearLayout.HORIZONTAL
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    0,
+                    1f
+                )
+            }
+            for (label in row) {
+                if (label.isEmpty()) {
+                    rowLl.addView(View(ctx), LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f))
+                    continue
+                }
+                val role = when (label) {
+                    "AC" -> KeyRole.UTILITY
+                    "=" -> KeyRole.PRIMARY_EQUALS
+                    "\u232B" -> KeyRole.UTILITY
+                    else -> KeyRole.DIGIT
+                }
+                val btn = NeumorphicKeyView(ctx).apply {
+                    text = label
+                    textSize = if (label == "=") 19f else 15f
+                    keyRole = role
+                    cornerRadiusDp = 10f
+                    isDarkThemeMode = activity.isDarkMode
+                    layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f).apply {
+                        setMargins(dp(3f), dp(3f), dp(3f), dp(3f))
+                    }
+                    setOnClickListener {
+                        when (label) {
+                            "\u232B" -> {
+                                if (amountBuffer.isNotEmpty()) amountBuffer = amountBuffer.dropLast(1)
+                            }
+                            "AC" -> amountBuffer = ""
+                            "=" -> runEngineConversion(activity)
+                            else -> amountBuffer += label
+                        }
+                        updatePreviewAndRate()
+                        activity.displaySpringPulse(this, 0.06f)
+                    }
+                    if (label == "=") {
+                        setOnLongClickListener { true }
+                        holdListener = { held ->
+                            if (held) activity.showButtonPopup(
+                                this,
+                                "Convert = - evaluates convert_fx(amount, from, to) via the C11 Math Engine and records it to History."
+                            ) else activity.dismissButtonPopup()
+                        }
                     }
                 }
+                quickKeys.add(btn)
+                rowLl.addView(btn)
             }
-            quickKeys.add(btn)
-            actionRow.addView(btn)
+            keyGrid.addView(rowLl)
         }
-
-        btnEquals = NeumorphicKeyView(ctx).apply {
-            text = "="
-            textSize = 19f
-            keyRole = KeyRole.PRIMARY_EQUALS
-            cornerRadiusDp = 10f
-            isDarkThemeMode = activity.isDarkMode
-            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1.15f)
-            setOnClickListener { runEngineConversion(activity) }
-            setOnLongClickListener { true }
-            holdListener = { held ->
-                if (held) activity.showButtonPopup(
-                    this,
-                    "Convert = — evaluates the conversion inside the C11 Math Engine via @currency_convert and records it to History."
-                ) else activity.dismissButtonPopup()
-            }
-        }
-        quickKeys.add(btnEquals!!)
-        actionRow.addView(btnEquals)
-        content.addView(actionRow)
+        content.addView(keyGrid)
 
         root.addView(content)
 
@@ -318,11 +342,7 @@ class CurrencyFragment : Fragment() {
     }
 
     private fun activeAmountExpression(): String {
-        customAmountExpr?.let { return it }
-        val act = activity as? MainActivity ?: return "1"
-        val full = if (act.currentPrimaryInput == "0.0") act.exprStatement
-        else act.exprStatement + act.currentPrimaryInput
-        return full.trim().ifBlank { "1" }
+        return amountBuffer.trim().ifBlank { "1" }
     }
 
     private fun updatePairCards() {
@@ -340,14 +360,14 @@ class CurrencyFragment : Fragment() {
         val rateStr = if (unitRate.isNaN()) "—" else formatCompact(unitRate)
         tvRateStatus?.text = "1 $fromCode = $rateStr $toCode • ${CurrencyConverter.lastProviderName}"
 
-        val amountExpr = activeAmountExpression()
-        val numericAmt = amountExpr.toDoubleOrNull()
-        tvPreviewExpr?.text = "$amountExpr $fromCode into $toCode"
+        val amt = activeAmountExpression()
+        val numericAmt = amt.toDoubleOrNull()
+        tvExpr?.text = "convert_fx($fromCode, $toCode, $amt)"
         if (numericAmt != null && !unitRate.isNaN()) {
             val converted = CurrencyConverter.convert(numericAmt, fromCode, toCode)
-            tvPreviewResult?.text = "= ${formatCompact(converted)} $toCode"
+            tvResult?.text = "= ${formatCompact(converted)} $toCode"
         } else {
-            tvPreviewResult?.text = "Tap = to evaluate via Math Engine"
+            tvResult?.text = "Tap = to evaluate via Math Engine"
         }
     }
 
@@ -399,14 +419,15 @@ class CurrencyFragment : Fragment() {
         tvFromName?.setTextColor(secondaryText)
         tvToName?.setTextColor(secondaryText)
 
-        previewCard?.background = GradientDrawable().apply {
+        exprCard?.background = GradientDrawable().apply {
             shape = GradientDrawable.RECTANGLE
             cornerRadius = 10f * density
             setColor(pillBg)
             setStroke(strokePx, cardStroke)
         }
-        tvPreviewExpr?.setTextColor(secondaryText)
-        tvPreviewResult?.setTextColor(primaryText)
+        tvExpr?.setTextColor(secondaryText)
+        tvResult?.setTextColor(primaryText)
+        tvRateStatus?.setTextColor(secondaryText)
 
         btnSwap?.isDarkThemeMode = dark
         quickKeys.forEach { it.isDarkThemeMode = dark }
@@ -588,6 +609,8 @@ class CurrencyFragment : Fragment() {
         root.addView(overlay, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         pickerOverlay = overlay
     }
+
+    fun springSettle(direction: Int, distance: Int) { }
 
     fun handleBackPressed(): Boolean {
         if (pickerOverlay != null) {

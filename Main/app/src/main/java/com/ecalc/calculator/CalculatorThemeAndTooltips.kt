@@ -144,11 +144,11 @@ internal fun MainActivity.updateTabIndicators(
     val inactiveIconColor = if (isDarkMode) "#E6EBF0" else "#333333"
     val tabIcons = listOf(
         binding.ivTabHistory, binding.ivTabBasic,
-        binding.ivTabExtended, binding.ivTabTrig, binding.ivTabFx, binding.ivTabCatalog, binding.ivTabCurrency
+        binding.ivTabExtended, binding.ivTabTrig, binding.ivTabFx, binding.ivTabCurrency, binding.ivTabCatalog
     )
     val indicators = listOf(
         binding.indTabHistory, binding.indTabBasic,
-        binding.indTabExtended, binding.indTabTrig, binding.indTabFx, binding.indTabCatalog, binding.indTabCurrency
+        binding.indTabExtended, binding.indTabTrig, binding.indTabFx, binding.indTabCurrency, binding.indTabCatalog
     )
     val clampedDist = distance.coerceIn(1, 4)
     val d = clampedDist.toFloat()
