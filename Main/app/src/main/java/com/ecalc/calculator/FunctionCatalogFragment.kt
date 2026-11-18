@@ -844,7 +844,7 @@ class FunctionCatalogFragment : Fragment() {
                             isHoldActive = true
                             parent?.requestDisallowInterceptTouchEvent(true)
                             hideSoftKeyboard(etSearch)
-                            act.showButtonPopup(this, item.richPopupSpannable(act))
+                            act.showButtonPopup(this, item.richPopupText())
                             true
                         }
                         setOnTouchListener { v, event ->
@@ -1821,7 +1821,7 @@ class FunctionCatalogFragment : Fragment() {
                 val item = holder.boundItem ?: return@setOnLongClickListener false
                 holder.isHoldActive = true
                 rowCard.parent?.requestDisallowInterceptTouchEvent(true)
-                (activity as? MainActivity)?.let { it.showButtonPopup(rowCard, item.richPopupSpannable(it)) }
+                (activity as? MainActivity)?.showButtonPopup(rowCard, item.richPopupText())
                 true
             }
 

@@ -196,6 +196,7 @@ class MainActivity : AppCompatActivity() {
                 when {
                     aboutOverlay != null -> dismissAboutInfoWindow()
                     currentWorkspacePage == 0 && (fragmentAt(5) as? FunctionCatalogFragment)?.handleBackPressed() == true -> Unit
+                    currentWorkspacePage == 0 && (fragmentAt(6) as? CurrencyFragment)?.handleBackPressed() == true -> Unit
                     currentWorkspacePage == 1 && workspaceFragment?.handleBackPressed() == true -> Unit
                     currentWorkspacePage == 1 -> switchWorkspacePage(0)
                     else -> playExitSplashCollapse()
@@ -507,10 +508,11 @@ class MainActivity : AppCompatActivity() {
 
                 val tabs = listOf(
                     binding.tabHistory, binding.tabBasic, binding.tabExtended,
-                    binding.tabTrig, binding.tabFx, binding.tabCatalog
+                    binding.tabTrig, binding.tabFx, binding.tabCatalog, binding.tabCurrency
                 )
                 val tab = tabs[position]
                 tabSpringPulse(tab, direction, distance)
+                if (position == 6) (fragmentAt(6) as? CurrencyFragment)?.updatePreviewAndRate()
 
                 binding.tabScroll.post {
                     val density = resources.displayMetrics.density
@@ -681,11 +683,50 @@ class MainActivity : AppCompatActivity() {
     }
 
     inner class MepCalcPagerAdapter(activity: FragmentActivity) : FragmentStateAdapter(activity) {
-        override fun getItemCount(): Int = 6
+        override fun getItemCount(): Int = 7
         override fun createFragment(position: Int): Fragment = when (position) {
             0 -> HistoryFragment()
             5 -> FunctionCatalogFragment()
+            6 -> CurrencyFragment()
             else -> KeyGridFragment.newInstance(position)
+        }
+    }
+
+    fun evaluateCurrencyConversion(amountExpr: String, fromCode: String, toCode: String) {
+        val displayLine = "$amountExpr $fromCode into $toCode"
+        binding.tvSecondaryDisplay.text = "$displayLine ="
+        displaySpringPulse(binding.tvPrimaryDisplay, 0.05f)
+        displaySpringPulse(binding.tvSecondaryDisplay, 0.04f)
+
+        MathEngineManager.evaluateCurrencyConversion(
+            amountExpr = amountExpr,
+            fromCode = fromCode,
+            toCode = toCode,
+            isDegreeMode = isDegreeMode,
+            lastAnswer = lastAnswer
+        ) { outcome ->
+            runOnUiThread {
+                if (outcome.ok) {
+                    lastAnswer = outcome.value
+                    currentPrimaryInput = outcome.value
+                    exprStatement = ""
+                    val resultLine = "$displayLine = ${outcome.value} [${outcome.unit}]"
+                    calculationHistory.add(0, resultLine)
+                    refreshHistoryUI()
+                    currentSecondaryFormula = resultLine
+                    binding.tvPrimaryDisplay.text = outcome.value
+                    binding.tvSecondaryDisplay.text = resultLine
+                    displaySpringPulse(binding.tvPrimaryDisplay, 0.05f)
+                    displaySpringPulse(binding.tvSecondaryDisplay, 0.035f)
+                    (fragmentAt(6) as? CurrencyFragment)?.updatePreviewAndRate()
+                } else {
+                    val msg = outcome.error ?: "Conversion error"
+                    val errLine = if (msg.length > 40) "⚠ ${msg.take(37)}…" else "Error: $msg"
+                    currentSecondaryFormula = errLine
+                    binding.tvSecondaryDisplay.text = errLine
+                    displaySpringPulse(binding.tvSecondaryDisplay, 0.04f)
+                }
+            }
         }
     }
 
@@ -837,7 +878,7 @@ class MainActivity : AppCompatActivity() {
 
         val tabViews = listOf(
             binding.tabHistory, binding.tabBasic, binding.tabExtended,
-            binding.tabTrig, binding.tabFx, binding.tabCatalog
+            binding.tabTrig, binding.tabFx, binding.tabCatalog, binding.tabCurrency
         )
         val tabNames = listOf("History", "Basic keypad", "Extended keypad", "Trig", "Fx", "Catalog")
 

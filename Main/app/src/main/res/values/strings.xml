@@ -11,5 +11,6 @@
     <string name="tab_trig">Trigonometry</string>
     <string name="tab_functions">Functions</string>
     <string name="tab_units">Units</string>
+    <string name="tab_currency">Currency Converter</string>
     <string name="tab_catalog">All Functions (stdlib + patches + project1)</string>
 </resources>

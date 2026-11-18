@@ -656,3 +656,30 @@ fun MathEngineManager.evaluate(
         }
     }
 }
+
+/**
+ * Helper for the Currency Converter tab: builds a `@currency_convert("FROM", "TO", amount)`
+ * call (which resolves all 55+ engine currencies and live/cached rates without keyword collisions)
+ * and evaluates it inside the C11 Math Engine.
+ */
+fun MathEngineManager.evaluateCurrencyConversion(
+    amountExpr: String,
+    fromCode: String,
+    toCode: String,
+    isDegreeMode: Boolean = true,
+    lastAnswer: String = "0.0",
+    onDone: (EvalOutcome) -> Unit
+) {
+    val normFrom = CurrencyConverter.normalizeCurrencyCode(fromCode)
+    val normTo = CurrencyConverter.normalizeCurrencyCode(toCode)
+    val cleanAmount = amountExpr.trim().ifBlank { "1" }
+    val innerExpr = toEngineSyntax(cleanAmount, isDegreeMode, lastAnswer)
+    val engineCall = "@currency_convert("$normFrom", "$normTo", ($innerExpr))"
+    evaluate(engineCall, isDegreeMode, lastAnswer) { outcome ->
+        if (outcome.ok) {
+            onDone(outcome.copy(unit = normTo.lowercase(java.util.Locale.US)))
+        } else {
+            onDone(outcome)
+        }
+    }
+}

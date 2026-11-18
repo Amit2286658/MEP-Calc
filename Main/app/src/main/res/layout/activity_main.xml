@@ -473,6 +473,31 @@
                         android:visibility="invisible" />
                 </FrameLayout>
 
+                <!-- Tab 6: Currency Converter (From -> To) -->
+                <FrameLayout
+                    android:id="@+id/tabCurrency"
+                    android:layout_width="60dp"
+                    android:layout_height="match_parent"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:contentDescription="@string/tab_currency">
+
+                    <ImageView
+                        android:id="@+id/ivTabCurrency"
+                        android:layout_width="21dp"
+                        android:layout_height="21dp"
+                        android:layout_gravity="center"
+                        android:src="@drawable/ic_tab_currency"
+                        android:contentDescription="@string/tab_currency" />
+
+                    <View
+                        android:id="@+id/indTabCurrency"
+                        android:layout_width="match_parent"
+                        android:layout_height="3dp"
+                        android:layout_gravity="bottom"
+                        android:visibility="invisible" />
+                </FrameLayout>
+
             </LinearLayout>
             </HorizontalScrollView>
 

@@ -1,12 +1,6 @@
 package com.ecalc
 
-import android.content.Context
-import android.text.Spannable
-import android.text.SpannableStringBuilder
 import java.util.concurrent.ConcurrentHashMap
-import com.ecalc.ui.ExactTypefaceSpan
-import com.ecalc.ui.PopupTypefaces
-import com.ecalc.ui.styledLabelDesc
 
 /**
  * Dynamic `.math` Doc-Comment Parser & Runtime Documentation Registry.
@@ -156,56 +150,3 @@ object CalculatorFunctionDocs {
  * omitted `@desc` / `@param` / `@return` tags).
  */
 fun CalculatorCatalogItem.richPopupText(): String = toPopupInfoText()
-
-/**
- * Formats the hold-popup info for a Functions-tab catalog item as a fully styled
- * [SpannableString] using the bundled Inter family:
- *  - the main description is **bold** (Inter SemiBold);
- *  - parameter / return lines are italic;
- *  - the "label — " part of each parameter/return bullet is bold-italic
- *    and everything after the dash is non-bold italic.
- */
-fun CalculatorCatalogItem.richPopupSpannable(ctx: Context): CharSequence {
-    val originLabel = when (originGroup) {
-        "project1" -> "project1 • [$moduleName]" + (sourceFile?.let { " ($it)" } ?: "")
-        "patch" -> "patch • [$moduleName]" + (sourceFile?.let { " ($it)" } ?: "")
-        else -> "stdlib • [$moduleName]" + (sourceFile?.let { " ($it)" } ?: "")
-    }
-    val kindLabel = when (kind) {
-        "op" -> "Operator / Overload"
-        "const" -> "Constant / Variable"
-        else -> "Function"
-    }
-    val bodyDesc = fullDescription.ifBlank { shortDescription }
-    val tfHd = PopupTypefaces.medium(ctx)
-    val tfMain = PopupTypefaces.semibold(ctx)
-
-    val out = SpannableStringBuilder()
-    out.append(signature)
-    out.append("\n")
-    out.append("Source: ").append(originLabel).append(" • ").append(kindLabel)
-    if (bodyDesc.isNotBlank()) {
-        out.append("\n")
-        val descStart = out.length
-        out.append(bodyDesc)
-        out.setSpan(ExactTypefaceSpan(tfMain), descStart, out.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
-    }
-    out.append("\n\n")
-    val hdrStart = out.length
-    out.append("Parameters / Operands:")
-    out.setSpan(ExactTypefaceSpan(tfHd), hdrStart, out.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
-
-    val bullets = if (paramBullets.isEmpty()) listOf("None — Takes no parameters") else paramBullets
-    for ((idx, line) in bullets.withIndex()) {
-        out.append("\n")
-        out.append(styledLabelDesc(ctx, line, prefix = "  ${idx + 1}. "))
-    }
-
-    out.append("\n\n")
-    val retHdrStart = out.length
-    out.append("Returns:")
-    out.setSpan(ExactTypefaceSpan(tfHd), retHdrStart, out.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
-    out.append("\n")
-    out.append(styledLabelDesc(ctx, returnBullet.ifBlank { "real | any" }, prefix = "  • "))
-    return out
-}

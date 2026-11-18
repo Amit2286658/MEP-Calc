@@ -10,8 +10,10 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.RenderEffect
 import android.graphics.Shader
+import android.graphics.Typeface
 import android.text.Spannable
 import android.text.SpannableString
+import android.text.style.StyleSpan
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
@@ -41,8 +43,6 @@ import androidx.core.widget.CompoundButtonCompat
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentActivity
 import androidx.viewpager2.adapter.FragmentStateAdapter
-import com.ecalc.ui.ExactTypefaceSpan
-import com.ecalc.ui.PopupTypefaces
 import androidx.viewpager2.widget.ViewPager2
 import com.ecalc.databinding.ActivityMainBinding
 import kotlin.math.hypot
@@ -123,11 +123,12 @@ internal fun MainActivity.applyThemeColors(dark: Boolean) {
 
     updateTabIndicators()
 
-    for (pos in 0 until 6) {
+    for (pos in 0 until 7) {
         when (val frag = fragmentAt(pos)) {
             is KeyGridFragment -> frag.applyTheme(dark)
             is HistoryFragment -> frag.onThemeChanged(dark)
             is FunctionCatalogFragment -> frag.onThemeChanged(dark)
+            is CurrencyFragment -> frag.applyTheme(dark)
             else -> {}
         }
     }
@@ -143,11 +144,11 @@ internal fun MainActivity.updateTabIndicators(
     val inactiveIconColor = if (isDarkMode) "#E6EBF0" else "#333333"
     val tabIcons = listOf(
         binding.ivTabHistory, binding.ivTabBasic,
-        binding.ivTabExtended, binding.ivTabTrig, binding.ivTabFx, binding.ivTabCatalog
+        binding.ivTabExtended, binding.ivTabTrig, binding.ivTabFx, binding.ivTabCatalog, binding.ivTabCurrency
     )
     val indicators = listOf(
         binding.indTabHistory, binding.indTabBasic,
-        binding.indTabExtended, binding.indTabTrig, binding.indTabFx, binding.indTabCatalog
+        binding.indTabExtended, binding.indTabTrig, binding.indTabFx, binding.indTabCatalog, binding.indTabCurrency
     )
     val clampedDist = distance.coerceIn(1, 4)
     val d = clampedDist.toFloat()
@@ -301,7 +302,7 @@ internal fun MainActivity.wobbleRound(cx: Float, cy: Float, maxRadius: Float, re
         add(Triple(binding.mrToggleRow, 0f, 1f))
         if (binding.cbMrToggle.isChecked) add(Triple(binding.mrDisplayCluster, 0f, 1f))
         listOf(binding.tabHistory, binding.tabBasic, binding.tabExtended,
-               binding.tabTrig, binding.tabFx, binding.tabCatalog).forEach { add(Triple(it, 5f, 1.9f)) }
+               binding.tabTrig, binding.tabFx, binding.tabCatalog, binding.tabCurrency).forEach { add(Triple(it, 5f, 1.9f)) }
     }
 
     targets.forEach { (view, rotBase, ampMul) ->
@@ -343,12 +344,13 @@ internal fun MainActivity.wobbleRound(cx: Float, cy: Float, maxRadius: Float, re
     }
 
     if (!inward) {
-        for (pos in 0 until 6) {
+        for (pos in 0 until 7) {
             val frag = fragmentAt(pos) ?: continue
             when (frag) {
                 is KeyGridFragment -> frag.wobbleRound(cx, cy, maxRadius, revealDurationMs)
                 is HistoryFragment -> frag.wobbleRound(cx, cy, maxRadius, revealDurationMs)
                 is FunctionCatalogFragment -> frag.wobbleRound(cx, cy, maxRadius, revealDurationMs)
+                is CurrencyFragment -> frag.wobbleRound(cx, cy, maxRadius, revealDurationMs)
                 else -> {}
             }
         }
@@ -483,26 +485,20 @@ internal fun MainActivity.playExitSplashCollapse() {
 }
 
 
-fun MainActivity.showButtonPopup(anchor: View, text: CharSequence) {
+fun MainActivity.showButtonPopup(anchor: View, text: String) {
     keyPopupOverlay?.let { (it.parent as? FrameLayout)?.removeView(it) }; keyPopupOverlay = null
     val root = binding.rootFrame; val density = resources.displayMetrics.density
     val popupBg = if (isDarkMode) "#222528" else "#FFFFFF"
     val popupText = if (isDarkMode) "#E6EBF0" else "#2A2A2A"
     val strokeCol = if (isDarkMode) "#13959B" else "#E58A7B"
-    // Plain-text popups (key/tool tips) get the shared Inter emphasis: the label before
-    // the first " — " is SemiBold, the rest stays Regular. Pre-styled spannable popups
-    // (function docs) are used as-is; the bubble only sets the Inter base typeface.
-    val formattedText: CharSequence = if (text is String) {
-        SpannableString(text).apply {
-            val dashIdx = text.indexOf(" — ")
-            if (dashIdx > 0) {
-                setSpan(ExactTypefaceSpan(PopupTypefaces.semibold(this@showButtonPopup)), 0, dashIdx, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
-            }
+    val formattedText = SpannableString(text).apply {
+        val dashIdx = text.indexOf(" — ")
+        if (dashIdx > 0) {
+            setSpan(StyleSpan(Typeface.BOLD), 0, dashIdx, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
         }
-    } else text
+    }
     val bubble = TextView(this).apply {
         this.text = formattedText; textSize = 13f; setTextColor(Color.parseColor(popupText))
-        typeface = PopupTypefaces.regular(this@showButtonPopup)
         background = GradientDrawable().apply {
             shape = GradientDrawable.RECTANGLE
             cornerRadius = 12f * density

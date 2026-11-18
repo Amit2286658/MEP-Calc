@@ -276,6 +276,80 @@ object CurrencyConverter {
     /**
      * Normalizes a currency code or symbol (e.g. `"usd"`, `"$"`, `"₹"`) to uppercase ISO 4217.
      */
+
+    data class CurrencyInfo(val code: String, val name: String, val symbol: String? = null)
+
+    private val currencyDisplayNames = mapOf(
+        "USD" to ("US Dollar" to "$"),
+        "INR" to ("Indian Rupee" to "₹"),
+        "EUR" to ("Euro" to "€"),
+        "GBP" to ("British Pound" to "£"),
+        "JPY" to ("Japanese Yen" to "¥"),
+        "CNY" to ("Chinese Yuan" to "¥"),
+        "AUD" to ("Australian Dollar" to "A$"),
+        "CAD" to ("Canadian Dollar" to "C$"),
+        "CHF" to ("Swiss Franc" to null),
+        "SGD" to ("Singapore Dollar" to "S$"),
+        "HKD" to ("Hong Kong Dollar" to "HK$"),
+        "NZD" to ("New Zealand Dollar" to "NZ$"),
+        "KRW" to ("South Korean Won" to "₩"),
+        "SEK" to ("Swedish Krona" to null),
+        "NOK" to ("Norwegian Krone" to null),
+        "DKK" to ("Danish Krone" to null),
+        "MXN" to ("Mexican Peso" to null),
+        "BRL" to ("Brazilian Real" to "R$"),
+        "ZAR" to ("South African Rand" to null),
+        "RUB" to ("Russian Ruble" to "₽"),
+        "TRY" to ("Turkish Lira" to "₺"),
+        "AED" to ("UAE Dirham" to null),
+        "SAR" to ("Saudi Riyal" to null),
+        "THB" to ("Thai Baht" to "฿"),
+        "MYR" to ("Malaysian Ringgit" to null),
+        "IDR" to ("Indonesian Rupiah" to null),
+        "PHP" to ("Philippine Peso" to "₱"),
+        "PLN" to ("Polish Zloty" to null),
+        "TWD" to ("Taiwan Dollar" to null),
+        "VND" to ("Vietnamese Dong" to "₫"),
+        "EGP" to ("Egyptian Pound" to null),
+        "PKR" to ("Pakistani Rupee" to null),
+        "BDT" to ("Bangladeshi Taka" to null),
+        "LKR" to ("Sri Lankan Rupee" to null),
+        "NPR" to ("Nepalese Rupee" to null),
+        "NGN" to ("Nigerian Naira" to "₦"),
+        "KES" to ("Kenyan Shilling" to null),
+        "GHS" to ("Ghanaian Cedi" to null),
+        "ARS" to ("Argentine Peso" to null),
+        "CLP" to ("Chilean Peso" to null),
+        "COP" to ("Colombian Peso" to null),
+        "PEN" to ("Peruvian Sol" to null),
+        "ILS" to ("Israeli Shekel" to "₪"),
+        "QAR" to ("Qatari Riyal" to null),
+        "KWD" to ("Kuwaiti Dinar" to null),
+        "BHD" to ("Bahraini Dinar" to null),
+        "OMR" to ("Omani Rial" to null),
+        "CZK" to ("Czech Koruna" to null),
+        "HUF" to ("Hungarian Forint" to null),
+        "RON" to ("Romanian Leu" to null),
+        "BGN" to ("Bulgarian Lev" to null),
+        "ISK" to ("Icelandic Krona" to null),
+        "UAH" to ("Ukrainian Hryvnia" to "₴"),
+        "KZT" to ("Kazakhstani Tenge" to "₸"),
+        "MAD" to ("Moroccan Dirham" to null)
+    )
+
+    private val priorityCodes = listOf(
+        "USD", "INR", "EUR", "GBP", "JPY", "CNY", "AUD", "CAD", "CHF", "SGD", "HKD", "AED", "SAR", "KRW", "NZD"
+    )
+
+    fun getSupportedCurrencies(): List<CurrencyInfo> {
+        val allCodes = ratesPerUsd.keys.toSet()
+        val ordered = (priorityCodes.filter { it in allCodes } + (allCodes - priorityCodes.toSet()).sorted())
+        return ordered.map { code ->
+            val meta = currencyDisplayNames[code]
+            CurrencyInfo(code = code, name = meta?.first ?: code, symbol = meta?.second)
+        }
+    }
+
     fun normalizeCurrencyCode(raw: String): String {
         val trimmed = raw.trim()
         symbolAliases[trimmed]?.let { return it }
