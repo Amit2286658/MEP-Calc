@@ -220,6 +220,7 @@ fun MainActivity.onKeyClicked(label: String) {
     binding.tvPrimaryDisplay.text =
         if (currentPrimaryInput == "0.0") exprStatement.trimEnd().ifBlank { "0.0" }
         else (exprStatement + currentPrimaryInput).ifBlank { "0.0" }
+    cursorPos = currentPrimaryInput.length
     displaySpringPulse(binding.tvPrimaryDisplay, 0.05f)
 }
 
@@ -259,6 +260,7 @@ internal fun MainActivity.evaluateCurrent() {
                 lastAnswer = outcome.value
                 currentPrimaryInput = outcome.value
                 exprStatement = ""
+                cursorPos = outcome.value.length
                 val unitTag = if (outcome.unit != "none") " [${outcome.unit}]" else ""
                 val resultLine = "$evalExpr = ${outcome.value}$unitTag"
                 // Do not litter History with "0 = 0.0" rows from empty "=" presses.

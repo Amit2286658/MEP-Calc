@@ -69,6 +69,8 @@ class MainActivity : AppCompatActivity() {
      *  at evaluate time): operators and function heads chain here while the
      *  active operand lives in currentPrimaryInput. */
     internal var exprStatement: String = ""
+    /** Cursor position within currentPrimaryInput (0..length). 0 = before first char. */
+    internal var cursorPos: Int = currentPrimaryInput.length
     /** Simple one-slot memory: accumulates via M+/M−, cleared by MR button. */
     internal var memoryValue: Double = 0.0
     val calculationHistory = mutableListOf<String>()
@@ -805,6 +807,7 @@ class MainActivity : AppCompatActivity() {
         currentPrimaryInput =
             if (currentPrimaryInput == "0.0" || currentPrimaryInput.isBlank()) value
             else currentPrimaryInput + value
+        cursorPos = currentPrimaryInput.length
 
         binding.tvPrimaryDisplay.text =
             if (currentPrimaryInput == "0.0") exprStatement.trimEnd().ifBlank { "0.0" }
