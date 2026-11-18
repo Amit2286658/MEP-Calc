@@ -211,77 +211,64 @@ class CurrencyFragment : Fragment() {
         exprCard!!.addView(tvResult!!)
         content.addView(exprCard!!)
 
-        // 4. Micro Keypad for entering the amount
+        // 4. Micro Keypad: insert helpers into the main expression text
         val keyGrid = LinearLayout(ctx).apply {
-            orientation = LinearLayout.VERTICAL
+            orientation = LinearLayout.HORIZONTAL
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
-                0,
-                1f
-            )
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = dp(4f) }
         }
         quickKeys.clear()
-        val rows = listOf(
-            listOf("7", "8", "9", "\u232B"),
-            listOf("4", "5", "6", "."),
-            listOf("1", "2", "3", "0"),
-            listOf("AC", "=", "", "")
-        )
-        for (row in rows) {
-            val rowLl = LinearLayout(ctx).apply {
-                orientation = LinearLayout.HORIZONTAL
-                layoutParams = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT,
-                    0,
-                    1f
-                )
-            }
-            for (label in row) {
-                if (label.isEmpty()) {
-                    rowLl.addView(View(ctx), LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f))
-                    continue
+        val microLabels = listOf("(", ")", ",", "insert")
+        for (label in microLabels) {
+            val role = if (label == "insert") KeyRole.PRIMARY_EQUALS else KeyRole.UTILITY
+            val btn = NeumorphicKeyView(ctx).apply {
+                text = label
+                textSize = if (label == "insert") 13f else 17f
+                keyRole = role
+                cornerRadiusDp = 10f
+                isDarkThemeMode = activity.isDarkMode
+                layoutParams = LinearLayout.LayoutParams(0, dp(46f), 1f).apply {
+                    setMargins(dp(3f), dp(3f), dp(3f), dp(3f))
                 }
-                val role = when (label) {
-                    "AC" -> KeyRole.UTILITY
-                    "=" -> KeyRole.PRIMARY_EQUALS
-                    "\u232B" -> KeyRole.UTILITY
-                    else -> KeyRole.DIGIT
-                }
-                val btn = NeumorphicKeyView(ctx).apply {
-                    text = label
-                    textSize = if (label == "=") 19f else 15f
-                    keyRole = role
-                    cornerRadiusDp = 10f
-                    isDarkThemeMode = activity.isDarkMode
-                    layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f).apply {
-                        setMargins(dp(3f), dp(3f), dp(3f), dp(3f))
-                    }
-                    setOnClickListener {
-                        when (label) {
-                            "\u232B" -> {
-                                if (amountBuffer.isNotEmpty()) amountBuffer = amountBuffer.dropLast(1)
+                setOnClickListener {
+                    when (label) {
+                        "insert" -> {
+                            val a = activity
+                            val current = if (a.currentPrimaryInput == "0.0") a.exprStatement else a.exprStatement + a.currentPrimaryInput
+                            val amount = current.trim().ifBlank { "0" }
+                            val formula = "convert_fx($fromCode, $toCode, $amount)"
+                            a.exprStatement = ""
+                            a.currentPrimaryInput = formula
+                            a.binding.tvPrimaryDisplay.text = formula
+                            a.displaySpringPulse(a.binding.tvPrimaryDisplay, 0.05f)
+                        }
+                        else -> {
+                            val a = activity
+                            if (a.currentPrimaryInput == "0.0" || a.currentPrimaryInput.isBlank()) {
+                                a.currentPrimaryInput = label
+                            } else {
+                                a.currentPrimaryInput += label
                             }
-                            "AC" -> amountBuffer = ""
-                            "=" -> runEngineConversion(activity)
-                            else -> amountBuffer += label
+                            a.binding.tvPrimaryDisplay.text =
+                                if (a.exprStatement.isBlank()) a.currentPrimaryInput else a.exprStatement + a.currentPrimaryInput
                         }
-                        updatePreviewAndRate()
-                        activity.displaySpringPulse(this, 0.06f)
                     }
-                    if (label == "=") {
-                        setOnLongClickListener { true }
-                        holdListener = { held ->
-                            if (held) activity.showButtonPopup(
-                                this,
-                                "Convert = - evaluates convert_fx(amount, from, to) via the C11 Math Engine and records it to History."
-                            ) else activity.dismissButtonPopup()
-                        }
+                    activity.displaySpringPulse(this, 0.06f)
+                }
+                if (label == "insert") {
+                    setOnLongClickListener { true }
+                    holdListener = { held ->
+                        if (held) activity.showButtonPopup(
+                            this,
+                            "Insert - wraps the current main expression into convert_fx(from, to, amount) using the selected currencies and records nothing until you evaluate."
+                        ) else activity.dismissButtonPopup()
                     }
                 }
-                quickKeys.add(btn)
-                rowLl.addView(btn)
             }
-            keyGrid.addView(rowLl)
+            quickKeys.add(btn)
+            keyGrid.addView(btn)
         }
         content.addView(keyGrid)
 
@@ -359,14 +346,16 @@ class CurrencyFragment : Fragment() {
         val rateStr = if (unitRate.isNaN()) "—" else formatCompact(unitRate)
         tvRateStatus?.text = "1 $fromCode = $rateStr $toCode • ${CurrencyConverter.lastProviderName}"
 
-        val amt = activeAmountExpression()
+        val act = activity as? MainActivity
+        val current = if (act == null) "" else if (act.currentPrimaryInput == "0.0") act.exprStatement else act.exprStatement + act.currentPrimaryInput
+        val amt = current.trim().ifBlank { "1" }
         val numericAmt = amt.toDoubleOrNull()
         tvExpr?.text = "convert_fx($fromCode, $toCode, $amt)"
         if (numericAmt != null && !unitRate.isNaN()) {
             val converted = CurrencyConverter.convert(numericAmt, fromCode, toCode)
             tvResult?.text = "= ${formatCompact(converted)} $toCode"
         } else {
-            tvResult?.text = "Tap = to evaluate via Math Engine"
+            tvResult?.text = "Tap insert to push into expression"
         }
     }
 

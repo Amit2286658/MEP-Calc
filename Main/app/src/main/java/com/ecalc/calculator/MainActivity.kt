@@ -880,9 +880,9 @@ class MainActivity : AppCompatActivity() {
 
         val tabViews = listOf(
             binding.tabHistory, binding.tabBasic, binding.tabExtended,
-            binding.tabTrig, binding.tabFx, binding.tabCatalog, binding.tabCurrency
+            binding.tabTrig, binding.tabFx, binding.tabCurrency, binding.tabCatalog
         )
-        val tabNames = listOf("History", "Basic keypad", "Extended keypad", "Trig", "Fx", "Catalog", "Currency")
+        val tabNames = listOf("History", "Basic keypad", "Extended keypad", "Trig", "Fx", "Currency", "Catalog")
 
         tabViews.forEachIndexed { idx, tab ->
             tab.setOnClickListener {
