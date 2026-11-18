@@ -67,7 +67,6 @@ class CurrencyFragment : Fragment() {
     private var fromCode: String = "USD"
     private var toCode: String = "INR"
     private var amountBuffer: String = ""
-    private var exprCard: LinearLayout? = null
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -208,9 +207,9 @@ class CurrencyFragment : Fragment() {
                 LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply { topMargin = dp(2f) }
         }
-        exprCard?.addView(tvExpr)
-        exprCard?.addView(tvResult)
-        content.addView(exprCard)
+        exprCard!!.addView(tvExpr!!)
+        exprCard!!.addView(tvResult!!)
+        content.addView(exprCard!!)
 
         // 4. Micro Keypad for entering the amount
         val keyGrid = LinearLayout(ctx).apply {
@@ -419,7 +418,7 @@ class CurrencyFragment : Fragment() {
         tvFromName?.setTextColor(secondaryText)
         tvToName?.setTextColor(secondaryText)
 
-        exprCard?.background = GradientDrawable().apply {
+        exprCard!!.background = GradientDrawable().apply {
             shape = GradientDrawable.RECTANGLE
             cornerRadius = 10f * density
             setColor(pillBg)
