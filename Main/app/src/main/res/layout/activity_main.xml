@@ -198,7 +198,7 @@
 
             <!-- Primary display — height tracks the section so tiny free-form
                  windows shrink it instead of letting it overlap the MR row -->
-            <TextView
+            <com.ecalc.ExpressionDisplayView
                 android:id="@+id/tvPrimaryDisplay"
                 android:fontFeatureSettings="tnum"
                 android:layout_width="0dp"
@@ -207,8 +207,11 @@
                 android:gravity="end|center_vertical"
                 android:textAlignment="viewEnd"
                 android:includeFontPadding="false"
-                android:paddingEnd="0dp"
+                android:paddingEnd="3dp"
                 android:maxLines="1"
+                android:scrollHorizontally="true"
+                android:clickable="true"
+                android:focusable="true"
                 android:text="0.0"
                 android:textColor="#333333"
                 android:autoSizeTextType="uniform"

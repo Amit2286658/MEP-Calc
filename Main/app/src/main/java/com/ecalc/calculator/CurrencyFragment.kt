@@ -29,11 +29,10 @@ import java.util.Locale
 import kotlin.math.hypot
 
 /**
- * Tab 6 (7th tab): Full-Engine Currency Converter (`From` -> `To`).
+ * Tab 5 (6th tab): Full-Engine Currency Converter (`From` -> `To`).
  *
  * Exposes all 55+ currencies supported by `CurrencyConverter` and the C11 Math Engine's
- * `@currency_convert` / `into` patch matrix, bridging the gap where the Functions catalog
- * only lists 6 `real -> real` currency helpers.
+ * `@currency_convert` / `into` patch matrix.
  */
 class CurrencyFragment : Fragment() {
 
@@ -58,8 +57,6 @@ class CurrencyFragment : Fragment() {
     private var toCode: String = "INR"
 
     private val quickKeys = mutableListOf<NeumorphicKeyView>()
-    private var btnEquals: NeumorphicKeyView? = null
-
     private var pickerOverlay: FrameLayout? = null
     private val wobbleAnimators = mutableListOf<ValueAnimator>()
 
@@ -87,7 +84,7 @@ class CurrencyFragment : Fragment() {
 
         val content = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(8f), dp(6f), dp(8f), dp(6f))
+            setPadding(dp(4f), dp(4f), dp(4f), dp(2f))
             layoutParams = FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.MATCH_PARENT
@@ -102,16 +99,21 @@ class CurrencyFragment : Fragment() {
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { bottomMargin = dp(8f) }
+            ).apply {
+                marginStart = dp(4f)
+                marginEnd = dp(4f)
+                bottomMargin = dp(6f)
+            }
         }
         tvTitle = TextView(ctx).apply {
             text = "Currency"
-            textSize = 15.5f
+            textSize = 14.5f
             setTypeface(typeface, Typeface.BOLD)
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         }
         tvRateStatus = TextView(ctx).apply {
             textSize = 11.5f
+            maxLines = 1
             setPadding(dp(10f), dp(4f), dp(10f), dp(4f))
             isClickable = true
             isFocusable = true
@@ -133,7 +135,11 @@ class CurrencyFragment : Fragment() {
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { bottomMargin = dp(8f) }
+            ).apply {
+                marginStart = dp(4f)
+                marginEnd = dp(4f)
+                bottomMargin = dp(6f)
+            }
         }
 
         fromCard = buildCurrencySelectorCard(ctx, dp, "FROM") { openCurrencyPicker(isFrom = true) }.also { card ->
@@ -177,89 +183,85 @@ class CurrencyFragment : Fragment() {
         pairRow.addView(toCard, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         content.addView(pairRow)
 
-        // (Expression display now lives in the main display; currency tab only picks currencies.)
-        // 4. Micro Keypad (4x4) for building the amount in the main expression
+        // 3. Full-height 5x4 Currency Keypad filling all remaining vertical real estate
         val keyGrid = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
+                0,
+                1f
             )
         }
         quickKeys.clear()
         val rows = listOf(
-            listOf("7", "8", "9", "\u232B"),
-            listOf("4", "5", "6", "="),
-            listOf("1", "2", "3", "insert"),
-            listOf("0", ".", ",", "()")
+            listOf("7", "8", "9", "÷", "AC"),
+            listOf("4", "5", "6", "×", "\u232B"),
+            listOf("1", "2", "3", "-", "insert"),
+            listOf("0", ".", "()", "+", "=")
         )
         for (row in rows) {
             val rowLl = LinearLayout(ctx).apply {
                 orientation = LinearLayout.HORIZONTAL
                 layoutParams = LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT
+                    0,
+                    1f
                 )
             }
             for (label in row) {
                 val role = when (label) {
-                    "insert", "=" -> KeyRole.PRIMARY_EQUALS
-                    "\u232B" -> KeyRole.UTILITY
+                    "=" -> KeyRole.PRIMARY_EQUALS
+                    "insert", "÷", "×", "-", "+" -> KeyRole.OPERATOR
+                    "AC", "\u232B", "()" -> KeyRole.UTILITY
                     else -> KeyRole.DIGIT
                 }
                 val btn = NeumorphicKeyView(ctx).apply {
                     text = label
-                    textSize = if (label == "insert") 12f else 15f
-                    keyRole = role
-                    cornerRadiusDp = 10f
-                    isDarkThemeMode = activity.isDarkMode
-                    layoutParams = LinearLayout.LayoutParams(0, dp(44f), 1f).apply {
-                        setMargins(dp(3f), dp(3f), dp(3f), dp(3f))
+                    textSize = when (label) {
+                        "insert" -> 12.5f
+                        "AC", "()" -> 14f
+                        else -> 16.5f
                     }
+                    keyRole = role
+                    cornerRadiusDp = 9f
+                    isDarkThemeMode = activity.isDarkMode
+                    layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f)
                     setOnClickListener {
                         val a = activity
                         when (label) {
-                            "\u232B" -> {
-                                if (a.cursorPos > 0 && a.currentPrimaryInput.isNotEmpty() && a.currentPrimaryInput != "0.0") {
-                                    a.currentPrimaryInput = a.currentPrimaryInput.removeRange(a.cursorPos - 1, a.cursorPos)
-                                    a.cursorPos = (a.cursorPos - 1).coerceAtLeast(0)
-                                } else if (a.currentPrimaryInput == "0.0" && a.exprStatement.isNotEmpty()) {
-                                    a.exprStatement = a.exprStatement.dropLast(1).trimEnd()
+                            "=" -> {
+                                val expr = a.expressionText.trim()
+                                if (expr.contains("currency_convert(") || expr.contains(" into ")) {
+                                    a.evaluateCurrent()
+                                } else {
+                                    val amt = expr.ifBlank { "0" }
+                                    a.evaluateCurrencyConversion(amt, fromCode, toCode)
                                 }
                             }
                             "insert" -> {
-                                val current = if (a.currentPrimaryInput == "0.0") a.exprStatement else a.exprStatement + a.currentPrimaryInput
-                                val amount = current.trim().ifBlank { "0" }
-                                val formula = "convert_fx($amount, $fromCode, $toCode)"
-                                a.exprStatement = ""
-                                a.currentPrimaryInput = formula
-                                // move cursor to after the amount (before ", ")
-                                a.cursorPos = "convert_fx($amount".length
-                                refreshDisplay(a)
-                                a.displaySpringPulse(a.binding.tvPrimaryDisplay, 0.05f)
-                                return@setOnClickListener
+                                val current = if (a.expressionText == "0.0") "" else a.expressionText.trim()
+                                val amount = current.ifBlank { "1" }
+                                val formula = "currency_convert($amount, \"$fromCode\", \"$toCode\")"
+                                a.expressionText = formula
+                                a.cursorPos = "currency_convert($amount".length
+                                a.refreshPrimaryDisplay(pulse = true)
                             }
-                            "()" -> {
-                                ensureOperand(a)
-                                insertAtCursor(a, "()")
-                                a.cursorPos -= 1  // place cursor inside parens
-                            }
-                            else -> {
-                                ensureOperand(a)
-                                insertAtCursor(a, label)
-                            }
+                            "()" -> a.onSmartBracketClicked()
+                            "×" -> a.onKeyClicked("x")
+                            else -> a.onKeyClicked(label)
                         }
-                        refreshDisplay(a)
-                        activity.displaySpringPulse(this, 0.06f)
+                        updatePreviewAndRate()
                     }
-                    if (label == "insert") {
-                        setOnLongClickListener { true }
-                        holdListener = { held ->
-                            if (held) activity.showButtonPopup(
-                                this,
-                                "Insert - wraps the current main expression into convert_fx(amount, from, to) using the selected currencies."
-                            ) else activity.dismissButtonPopup()
-                        }
+                    val tooltip = when (label) {
+                        "insert" -> "Insert — wraps the current expression into currency_convert(amount, \"$fromCode\", \"$toCode\") for mixing with other math."
+                        "=" -> "= — evaluates the currency conversion ($fromCode → $toCode) and records it to History."
+                        "()" -> "( ) — smart bracket: opens or closes parentheses at the cursor."
+                        else -> activity.keyDescriptionFor(if (label == "×") "x" else label)
+                    }
+                    setOnLongClickListener { true }
+                    holdListener = { held ->
+                        if (held) activity.showButtonPopup(this, tooltip)
+                        else activity.dismissButtonPopup()
                     }
                 }
                 quickKeys.add(btn)
@@ -290,27 +292,27 @@ class CurrencyFragment : Fragment() {
     ): LinearLayout {
         return LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(12f), dp(8f), dp(12f), dp(8f))
+            setPadding(dp(11f), dp(6f), dp(11f), dp(6f))
             isClickable = true
             isFocusable = true
             setOnClickListener { onClick() }
 
             addView(TextView(ctx).apply {
                 text = labelText
-                textSize = 10.5f
+                textSize = 10f
                 setTypeface(typeface, Typeface.BOLD)
                 letterSpacing = 0.08f
             })
             addView(TextView(ctx).apply {
-                textSize = 18f
+                textSize = 17f
                 setTypeface(typeface, Typeface.BOLD)
                 layoutParams = LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.WRAP_CONTENT,
                     LinearLayout.LayoutParams.WRAP_CONTENT
-                ).apply { topMargin = dp(2f) }
+                ).apply { topMargin = dp(1f) }
             })
             addView(TextView(ctx).apply {
-                textSize = 11.5f
+                textSize = 11f
                 maxLines = 1
             })
         }
@@ -334,42 +336,24 @@ class CurrencyFragment : Fragment() {
         tvToName?.text = toInfo?.name ?: toCode
     }
 
-    private fun ensureOperand(a: MainActivity) {
-        if (a.currentPrimaryInput == "0.0") {
-            a.currentPrimaryInput = ""
-            a.cursorPos = 0
-        }
-    }
-
-    private fun insertAtCursor(a: MainActivity, text: String) {
-        val p = a.cursorPos.coerceIn(0, a.currentPrimaryInput.length)
-        a.currentPrimaryInput = a.currentPrimaryInput.substring(0, p) + text + a.currentPrimaryInput.substring(p)
-        a.cursorPos = p + text.length
-    }
-
-    private fun refreshDisplay(a: MainActivity) {
-        val base = if (a.exprStatement.isBlank()) a.currentPrimaryInput else a.exprStatement + a.currentPrimaryInput
-        val display = if (a.cursorPos in 0 until a.currentPrimaryInput.length) {
-            val idx = a.exprStatement.length + a.cursorPos
-            base.substring(0, idx) + "|" + base.substring(idx)
-        } else base
-        a.binding.tvPrimaryDisplay.text = display.ifBlank { "0.0" }
-    }
-
     fun updatePreviewAndRate() {
-        val unitRate = CurrencyConverter.convert(1.0, fromCode, toCode)
-        val rateStr = if (unitRate.isNaN()) "—" else formatCompact(unitRate)
-        tvRateStatus?.text = "1 $fromCode = $rateStr $toCode • ${CurrencyConverter.lastProviderName}"
-
         val act = activity as? MainActivity
-        val current = if (act == null) "" else if (act.currentPrimaryInput == "0.0") act.exprStatement else act.exprStatement + act.currentPrimaryInput
-        val amt = current.trim().ifBlank { "1" }
-        // preview only; actual eval happens via insert + main =
+        val expr = act?.expressionText?.trim().orEmpty()
+        val typedVal = expr.toDoubleOrNull()
+        if (typedVal != null && typedVal != 0.0) {
+            val converted = CurrencyConverter.convert(typedVal, fromCode, toCode)
+            val convStr = if (converted.isNaN()) "—" else formatCompact(converted)
+            tvRateStatus?.text = "${formatCompact(typedVal)} $fromCode ≈ $convStr $toCode • ${CurrencyConverter.lastProviderName}"
+        } else {
+            val unitRate = CurrencyConverter.convert(1.0, fromCode, toCode)
+            val rateStr = if (unitRate.isNaN()) "—" else formatCompact(unitRate)
+            tvRateStatus?.text = "1 $fromCode = $rateStr $toCode • ${CurrencyConverter.lastProviderName}"
+        }
     }
 
     private fun formatCompact(v: Double): String {
         if (v.isNaN() || v.isInfinite()) return "—"
-        return if (kotlin.math.abs(v) >= 1000.0 || kotlin.math.abs(v) < 0.01) {
+        return if (kotlin.math.abs(v) >= 1000.0 || (v != 0.0 && kotlin.math.abs(v) < 0.01)) {
             String.format(Locale.US, "%.4g", v)
         } else {
             String.format(Locale.US, "%.4f", v).trimEnd('0').trimEnd('.')
@@ -409,8 +393,6 @@ class CurrencyFragment : Fragment() {
         tvToCode?.setTextColor(primaryText)
         tvFromName?.setTextColor(secondaryText)
         tvToName?.setTextColor(secondaryText)
-
-        tvRateStatus?.setTextColor(secondaryText)
 
         btnSwap?.isDarkThemeMode = dark
         quickKeys.forEach { it.isDarkThemeMode = dark }

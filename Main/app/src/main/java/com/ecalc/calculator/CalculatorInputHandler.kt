@@ -3,232 +3,300 @@ package com.ecalc
 import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
 import android.animation.ValueAnimator
-import android.content.Intent
-import android.content.res.ColorStateList
-import android.graphics.Bitmap
-import android.graphics.Canvas
-import android.graphics.Color
-import android.graphics.RenderEffect
-import android.graphics.Shader
-import android.graphics.Typeface
-import android.graphics.drawable.ColorDrawable
-import android.graphics.drawable.GradientDrawable
-import android.net.Uri
-import android.os.Build
-import android.os.Bundle
-import android.util.TypedValue
-import android.view.Gravity
-import android.view.MotionEvent
 import android.view.View
-import android.view.ViewAnimationUtils
-import android.view.ViewTreeObserver
-import android.view.animation.AccelerateDecelerateInterpolator
-import android.view.animation.AccelerateInterpolator
-import android.view.animation.DecelerateInterpolator
 import android.view.animation.LinearInterpolator
-import android.view.animation.OvershootInterpolator
-import android.widget.FrameLayout
-import android.widget.ImageView
-import android.widget.LinearLayout
-import android.widget.ScrollView
-import android.widget.TextView
-import android.widget.Toast
-import androidx.activity.OnBackPressedCallback
-import androidx.appcompat.app.AppCompatActivity
-import androidx.core.view.WindowCompat
-import androidx.core.widget.CompoundButtonCompat
-import androidx.fragment.app.Fragment
-import androidx.fragment.app.FragmentActivity
-import androidx.viewpager2.adapter.FragmentStateAdapter
-import androidx.viewpager2.widget.ViewPager2
-import com.ecalc.databinding.ActivityMainBinding
-import kotlin.math.hypot
-
 
 fun MainActivity.onKeyClicked(label: String) {
-    fun flushOperand() {
-        if (currentPrimaryInput != "0.0") {
-            exprStatement += currentPrimaryInput
-            currentPrimaryInput = "0.0"
+    fun insertAtCursor(text: String) {
+        val p = cursorPos.coerceIn(0, expressionText.length)
+        expressionText = expressionText.substring(0, p) + text + expressionText.substring(p)
+        cursorPos = p + text.length
+    }
+
+    fun clearIfDefaultZero() {
+        if (expressionText == "0.0" || expressionText == "0") {
+            expressionText = ""
+            cursorPos = 0
         }
     }
 
-    fun withOperator(opDisplay: String, spaced: Boolean = false) {
-        val tail = if (spaced) "$opDisplay " else opDisplay
-        val trimmed = exprStatement.trimEnd()
-        exprStatement = if (trimmed.isNotEmpty() && trimmed.last() in "+-×÷^") {
-            "${trimmed.dropLast(1)}$tail"
-        } else { "$trimmed$tail" }
+    fun needsImplicitMul(before: String): Boolean {
+        val last = before.trimEnd().lastOrNull() ?: return false
+        return last !in "+-×÷/*^,( "
+    }
+
+    fun insertOperator(opDisplay: String) {
+        if (expressionText == "0.0") {
+            expressionText = if (opDisplay == "-") "-" else "0$opDisplay"
+            cursorPos = expressionText.length
+            return
+        }
+        val p = cursorPos.coerceIn(0, expressionText.length)
+        if (p == 0 && expressionText.isEmpty()) {
+            expressionText = if (opDisplay == "-") "-" else "0$opDisplay"
+            cursorPos = expressionText.length
+            return
+        }
+        val before = expressionText.substring(0, p)
+        val after = expressionText.substring(p)
+        val trimmedBefore = before.trimEnd()
+        val prev = trimmedBefore.lastOrNull()
+        val newBefore = if (prev != null && prev in "+-×÷/^" && !(opDisplay == "-" && prev in "×÷/^(")) {
+            trimmedBefore.dropLast(1) + opDisplay
+        } else {
+            trimmedBefore + opDisplay
+        }
+        expressionText = newBefore + after
+        cursorPos = newBefore.length
+    }
+
+    fun currentNumberTokenRange(): IntRange {
+        val p = cursorPos.coerceIn(0, expressionText.length)
+        var start = p
+        while (start > 0 && (expressionText[start - 1].isDigit() || expressionText[start - 1] == '.')) {
+            start--
+        }
+        var end = p
+        while (end < expressionText.length && (expressionText[end].isDigit() || expressionText[end] == '.')) {
+            end++
+        }
+        return start until end
     }
 
     when (label) {
         "AC" -> {
-            exprStatement = ""; currentPrimaryInput = "0.0"; currentSecondaryFormula = "0.0"
-            binding.tvPrimaryDisplay.text = "0.0"; binding.tvSecondaryDisplay.text = "0.0"
-            displaySpringPulse(binding.tvPrimaryDisplay, 0.05f)
+            expressionText = ""
+            cursorPos = 0
+            currentSecondaryFormula = "0.0"
+            binding.tvSecondaryDisplay.text = "0.0"
+            refreshPrimaryDisplay(pulse = true)
             displaySpringPulse(binding.tvSecondaryDisplay, 0.035f)
             return
         }
         "⌫" -> {
-            when {
-                currentPrimaryInput.length > 1 && currentPrimaryInput != "0.0" ->
-                    currentPrimaryInput = currentPrimaryInput.dropLast(1)
-                currentPrimaryInput != "0.0" -> currentPrimaryInput = "0.0"
-                else -> {
-                    var s = exprStatement.trimEnd()
-                    val endedWithOpenParen = s.endsWith("(")
-                    if (s.isNotEmpty()) s = s.dropLast(1).trimEnd()
-                    if (endedWithOpenParen) {
-                        val trailIdent = Regex("[a-zA-Z_][a-zA-Z0-9_]*$").find(s)
-                        if (trailIdent != null) {
-                            s = s.substring(0, trailIdent.range.first).trimEnd()
-                        } else {
-                            val heads = listOf("ⁿ√", "√", "log₂", "1/", "10^")
-                            for (h in heads) { if (s.endsWith(h)) { s = s.removeSuffix(h).trimEnd(); break } }
+            if (expressionText == "0.0" || expressionText.isEmpty()) {
+                expressionText = ""
+                cursorPos = 0
+            } else {
+                val p = cursorPos.coerceIn(0, expressionText.length)
+                if (p > 0) {
+                    val before = expressionText.substring(0, p)
+                    val after = expressionText.substring(p)
+                    val newBefore = when {
+                        before.endsWith("ans") -> before.dropLast(3)
+                        before.endsWith("(") -> {
+                            val withoutParen = before.dropLast(1)
+                            val trailIdent = Regex("[a-zA-Z_][a-zA-Z0-9_]*$").find(withoutParen)
+                            if (trailIdent != null) {
+                                withoutParen.substring(0, trailIdent.range.first)
+                            } else {
+                                val heads = listOf("ⁿ√", "√", "log₂", "1/", "10^")
+                                var res = withoutParen
+                                for (h in heads) {
+                                    if (res.endsWith(h)) {
+                                        res = res.removeSuffix(h)
+                                        break
+                                    }
+                                }
+                                res
+                            }
                         }
+                        else -> before.dropLast(1)
                     }
-                    exprStatement = s
+                    expressionText = newBefore + after
+                    cursorPos = newBefore.length
                 }
             }
         }
         "M+" -> {
-            val value = currentPrimaryInput.toDoubleOrNull() ?: 0.0
+            val value = expressionText.toDoubleOrNull()
+                ?: Regex("[-+]?\\d+(?:\\.\\d+)?$").find(expressionText)?.value?.toDoubleOrNull()
+                ?: 0.0
             memoryValue += value
-            val displayStr = formatValue(memoryValue)
-            binding.tvMrValue.text = displayStr
+            binding.tvMrValue.text = formatValue(memoryValue)
             displaySpringPulse(binding.tvMrValue, 0.05f)
             return
         }
         "M-" -> {
-            val value = currentPrimaryInput.toDoubleOrNull() ?: 0.0
+            val value = expressionText.toDoubleOrNull()
+                ?: Regex("[-+]?\\d+(?:\\.\\d+)?$").find(expressionText)?.value?.toDoubleOrNull()
+                ?: 0.0
             memoryValue -= value
-            val displayStr = formatValue(memoryValue)
-            binding.tvMrValue.text = displayStr
+            binding.tvMrValue.text = formatValue(memoryValue)
             displaySpringPulse(binding.tvMrValue, 0.05f)
             return
         }
-        "=" -> { evaluateCurrent(); return }
+        "=" -> {
+            evaluateCurrent()
+            return
+        }
         "Ans" -> {
-            if (currentPrimaryInput == "0.0") currentPrimaryInput = "ans"
-            else currentPrimaryInput += "ans"
+            clearIfDefaultZero()
+            val p = cursorPos.coerceIn(0, expressionText.length)
+            val before = expressionText.substring(0, p)
+            val ins = if (needsImplicitMul(before)) "×ans" else "ans"
+            insertAtCursor(ins)
         }
         "π", "e" -> {
-            if (currentPrimaryInput == "0.0") currentPrimaryInput = label
-            else currentPrimaryInput += label
+            clearIfDefaultZero()
+            val p = cursorPos.coerceIn(0, expressionText.length)
+            val before = expressionText.substring(0, p)
+            val ins = if (needsImplicitMul(before)) "×$label" else label
+            insertAtCursor(ins)
         }
         "rand" -> {
+            clearIfDefaultZero()
             val r = formatValue(Math.random())
-            if (currentPrimaryInput != "0.0") {
-                flushOperand()
-                if (exprStatement.isNotEmpty() && exprStatement.trimEnd().last() !in "+-×÷/*^,(") {
-                    exprStatement += "×"
-                }
-            }
-            currentPrimaryInput = r
+            val p = cursorPos.coerceIn(0, expressionText.length)
+            val before = expressionText.substring(0, p)
+            val ins = if (needsImplicitMul(before)) "×$r" else r
+            insertAtCursor(ins)
         }
         "ⁿ√" -> {
-            val hasActiveOperand = currentPrimaryInput != "0.0" || exprStatement.trimEnd().endsWith(")")
-            if (hasActiveOperand) {
-                flushOperand()
-                exprStatement += "√("
-            } else {
-                exprStatement += "ⁿ√("
-            }
+            clearIfDefaultZero()
+            val p = cursorPos.coerceIn(0, expressionText.length)
+            val before = expressionText.substring(0, p)
+            val prev = before.trimEnd().lastOrNull()
+            val hasActiveOperand = prev != null && (prev.isDigit() || prev in ")πe!%")
+            insertAtCursor(if (hasActiveOperand) "√(" else "ⁿ√(")
         }
         "!" -> {
-            if (currentPrimaryInput != "0.0") currentPrimaryInput += "!"
-            else if (exprStatement.trimEnd().endsWith(")")) exprStatement += "!"
-        }
-        "x²" -> {
-            if (currentPrimaryInput != "0.0") currentPrimaryInput += "^2"
-            else if (exprStatement.trimEnd().endsWith(")")) exprStatement += "^2"
-        }
-        "x³" -> {
-            if (currentPrimaryInput != "0.0") currentPrimaryInput += "^3"
-            else if (exprStatement.trimEnd().endsWith(")")) exprStatement += "^3"
-        }
-        "xʸ" -> { flushOperand(); withOperator("^") }
-        "10ˣ" -> { flushOperand(); exprStatement += "10^(" }
-        "eˣ" -> { flushOperand(); exprStatement += "exp(" }
-        "1/x" -> { flushOperand(); exprStatement += "1/(" }
-        "%" -> {
-            if (currentPrimaryInput != "0.0" && !currentPrimaryInput.endsWith("%")) {
-                currentPrimaryInput += "%"
-            } else if (currentPrimaryInput == "0.0" && exprStatement.trimEnd().endsWith(")")) {
-                exprStatement += "%"
+            val p = cursorPos.coerceIn(0, expressionText.length)
+            val prev = expressionText.substring(0, p).trimEnd().lastOrNull()
+            if (prev != null && (prev.isDigit() || prev in ")πes")) {
+                insertAtCursor("!")
             }
         }
-        "+" -> { flushOperand(); withOperator("+") }
-        "-" -> { flushOperand(); withOperator("-") }
-        "x" -> { flushOperand(); withOperator("×") }
-        "÷" -> { flushOperand(); withOperator("/") }
-        "^" -> { flushOperand(); withOperator("^") }
+        "x²" -> {
+            val p = cursorPos.coerceIn(0, expressionText.length)
+            val prev = expressionText.substring(0, p).trimEnd().lastOrNull()
+            if (prev != null && (prev.isDigit() || prev in ")πes!%")) {
+                insertAtCursor("^2")
+            }
+        }
+        "x³" -> {
+            val p = cursorPos.coerceIn(0, expressionText.length)
+            val prev = expressionText.substring(0, p).trimEnd().lastOrNull()
+            if (prev != null && (prev.isDigit() || prev in ")πes!%")) {
+                insertAtCursor("^3")
+            }
+        }
+        "xʸ" -> insertOperator("^")
+        "10ˣ" -> {
+            clearIfDefaultZero()
+            val p = cursorPos.coerceIn(0, expressionText.length)
+            val ins = if (needsImplicitMul(expressionText.substring(0, p))) "×10^(" else "10^("
+            insertAtCursor(ins)
+        }
+        "eˣ" -> {
+            clearIfDefaultZero()
+            val p = cursorPos.coerceIn(0, expressionText.length)
+            val ins = if (needsImplicitMul(expressionText.substring(0, p))) "×exp(" else "exp("
+            insertAtCursor(ins)
+        }
+        "1/x" -> {
+            clearIfDefaultZero()
+            val p = cursorPos.coerceIn(0, expressionText.length)
+            val ins = if (needsImplicitMul(expressionText.substring(0, p))) "×1/(" else "1/("
+            insertAtCursor(ins)
+        }
+        "%" -> {
+            val p = cursorPos.coerceIn(0, expressionText.length)
+            val prev = expressionText.substring(0, p).trimEnd().lastOrNull()
+            if (prev != null && (prev.isDigit() || prev in ")πes") && prev != '%') {
+                insertAtCursor("%")
+            }
+        }
+        "+" -> insertOperator("+")
+        "-" -> insertOperator("-")
+        "x" -> insertOperator("×")
+        "÷" -> insertOperator("÷")
+        "^" -> insertOperator("^")
         "." -> {
-            if (!currentPrimaryInput.contains(".")) {
-                currentPrimaryInput = if (currentPrimaryInput == "0.0") "0." else currentPrimaryInput + "."
+            if (expressionText.isEmpty() || expressionText == "0.0" || expressionText == "0") {
+                expressionText = "0."
+                cursorPos = 2
+            } else {
+                val range = currentNumberTokenRange()
+                val token = expressionText.substring(range.first, range.last + 1)
+                if (!token.contains('.')) {
+                    val ins = if (range.isEmpty()) "0." else "."
+                    insertAtCursor(ins)
+                }
             }
         }
         "EE" -> {
-            if (!currentPrimaryInput.contains('E') && !currentPrimaryInput.contains("ans")) {
-                currentPrimaryInput = if (currentPrimaryInput == "0.0") "1EE" else currentPrimaryInput + "EE"
+            if (expressionText.isEmpty() || expressionText == "0.0" || expressionText == "0") {
+                expressionText = "1EE"
+                cursorPos = 3
+            } else {
+                val p = cursorPos.coerceIn(0, expressionText.length)
+                val before = expressionText.substring(0, p)
+                val prev = before.lastOrNull()
+                val ins = if (prev != null && prev.isDigit()) "EE" else "1EE"
+                insertAtCursor(ins)
             }
         }
-        "0","1","2","3","4","5","6","7","8","9" -> {
-            currentPrimaryInput = if (currentPrimaryInput == "0.0" || currentPrimaryInput == "0") label else currentPrimaryInput + label
+        "0", "1", "2", "3", "4", "5", "6", "7", "8", "9" -> {
+            if (expressionText.isEmpty() || expressionText == "0.0" || expressionText == "0") {
+                expressionText = label
+                cursorPos = label.length
+            } else {
+                insertAtCursor(label)
+            }
         }
         "," -> {
-            flushOperand()
-            val trimmed = exprStatement.trimEnd()
-            if (trimmed.isNotEmpty() && trimmed.last() !in "(,+-×÷/*^") {
-                exprStatement = "$trimmed,"
+            val p = cursorPos.coerceIn(0, expressionText.length)
+            val prev = expressionText.substring(0, p).trimEnd().lastOrNull()
+            if (prev != null && prev !in "(,+-×÷/*^") {
+                insertAtCursor(",")
             }
         }
-        "(" -> { flushOperand(); exprStatement += "(" }
+        "(" -> {
+            clearIfDefaultZero()
+            insertAtCursor("(")
+        }
         ")" -> {
-            flushOperand()
-            val openParens = exprStatement.count { it == '(' } - exprStatement.count { it == ')' }
+            val p = cursorPos.coerceIn(0, expressionText.length)
+            val before = expressionText.substring(0, p)
+            val openParens = before.count { it == '(' } - before.count { it == ')' }
             if (openParens > 0) {
-                val lastOpen = exprStatement.lastIndexOf('(')
-                val prefix = if (lastOpen >= 0) exprStatement.substring(0, lastOpen) else ""
-                val inside = if (lastOpen >= 0) exprStatement.substring(lastOpen + 1) else ""
+                val lastOpen = before.lastIndexOf('(')
+                val prefix = if (lastOpen >= 0) before.substring(0, lastOpen) else ""
+                val inside = if (lastOpen >= 0) before.substring(lastOpen + 1) else ""
                 val twoArgHeads = listOf("npr", "ncr", "gcd", "lcm", "root", "ⁿ√")
                 if (twoArgHeads.any { prefix.endsWith(it) } && !inside.contains(',')) {
-                    exprStatement += ","
+                    insertAtCursor(",")
                 } else {
-                    exprStatement += ")"
+                    insertAtCursor(")")
                 }
             }
         }
         else -> {
             if (label.isNotEmpty() && (label[0].isLetterOrDigit() || label[0] == '√')) {
-                if (currentPrimaryInput != "0.0") {
-                    flushOperand()
-                    if (exprStatement.isNotEmpty() && exprStatement.trimEnd().last() !in "+-×÷/*^,(") {
-                        exprStatement += "×"
-                    }
-                }
+                clearIfDefaultZero()
+                val p = cursorPos.coerceIn(0, expressionText.length)
+                val before = expressionText.substring(0, p)
                 val fn = when (label) {
                     "nPr" -> "npr"
                     "nCr" -> "ncr"
                     "log₂" -> "log2"
                     else -> label
                 }
-                exprStatement += "$fn("
+                val ins = if (needsImplicitMul(before)) "×$fn(" else "$fn("
+                insertAtCursor(ins)
             }
         }
     }
-    binding.tvPrimaryDisplay.text =
-        if (currentPrimaryInput == "0.0") exprStatement.trimEnd().ifBlank { "0.0" }
-        else (exprStatement + currentPrimaryInput).ifBlank { "0.0" }
-    cursorPos = currentPrimaryInput.length
-    displaySpringPulse(binding.tvPrimaryDisplay, 0.05f)
+
+    refreshPrimaryDisplay(pulse = true)
 }
 
 internal fun MainActivity.onSmartBracketClicked() {
-    val activeOperand = if (currentPrimaryInput != "0.0") currentPrimaryInput else ""
-    val tail = (exprStatement + activeOperand).trimEnd()
-    val lastChar = tail.lastOrNull()
-    val balance = tail.count { it == '(' } - tail.count { it == ')' }
+    val p = cursorPos.coerceIn(0, expressionText.length)
+    val before = expressionText.substring(0, p).trimEnd()
+    val lastChar = before.lastOrNull()
+    val balance = before.count { it == '(' } - before.count { it == ')' }
     val operandExpected = lastChar == null || lastChar in "(,+×÷/*^-"
     val shouldClose = balance > 0 && !operandExpected
     if (shouldClose) {
@@ -239,8 +307,7 @@ internal fun MainActivity.onSmartBracketClicked() {
 }
 
 internal fun MainActivity.evaluateCurrent() {
-    val fullDisplay = if (currentPrimaryInput == "0.0") exprStatement
-                      else exprStatement + currentPrimaryInput
+    val fullDisplay = expressionText.trim()
     // "=" with nothing typed still runs the full engine round-trip on a zero expression so the
     // spring + result reveal always fire, instead of silently early-returning.
     val evalExpr = fullDisplay.ifBlank { "0" }
@@ -248,9 +315,6 @@ internal fun MainActivity.evaluateCurrent() {
 
     binding.tvSecondaryDisplay.text = "$evalExpr ="
 
-    // Spring feedback fires at the '=' click itself (expression line + current answer preview),
-    // independent of the engine round-trip below — the damped-spring kick the user sees on every
-    // equals press, even while evaluation is still in flight on the worker queue.
     displaySpringPulse(binding.tvPrimaryDisplay, 0.05f)
     displaySpringPulse(binding.tvSecondaryDisplay, 0.04f)
 
@@ -258,20 +322,17 @@ internal fun MainActivity.evaluateCurrent() {
         runOnUiThread {
             if (outcome.ok) {
                 lastAnswer = outcome.value
-                currentPrimaryInput = outcome.value
-                exprStatement = ""
+                expressionText = outcome.value
                 cursorPos = outcome.value.length
                 val unitTag = if (outcome.unit != "none") " [${outcome.unit}]" else ""
                 val resultLine = "$evalExpr = ${outcome.value}$unitTag"
-                // Do not litter History with "0 = 0.0" rows from empty "=" presses.
                 if (!blankEval) {
                     calculationHistory.add(0, resultLine)
                     refreshHistoryUI()
                 }
                 currentSecondaryFormula = resultLine
-                binding.tvPrimaryDisplay.text = outcome.value
+                refreshPrimaryDisplay(pulse = true)
                 binding.tvSecondaryDisplay.text = resultLine
-                displaySpringPulse(binding.tvPrimaryDisplay, 0.05f)
                 displaySpringPulse(binding.tvSecondaryDisplay, 0.035f)
             } else {
                 val msg = outcome.error ?: "Unknown error"

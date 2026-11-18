@@ -62,15 +62,11 @@ class MainActivity : AppCompatActivity() {
     internal var splashStdlibSetupDone: Boolean = false
     internal var isExitingApp: Boolean = false
 
-    internal var currentPrimaryInput: String = "0.0"
+    internal var expressionText: String = ""
     internal var currentSecondaryFormula: String = "0.0"
     internal var lastAnswer: String = "0.0"
-    /** Accumulated expression statement (display dialect, engine-translated
-     *  at evaluate time): operators and function heads chain here while the
-     *  active operand lives in currentPrimaryInput. */
-    internal var exprStatement: String = ""
-    /** Cursor position within currentPrimaryInput (0..length). 0 = before first char. */
-    internal var cursorPos: Int = currentPrimaryInput.length
+    /** Cursor position within expressionText (0..expressionText.length). 0 = before first char. */
+    internal var cursorPos: Int = 0
     /** Simple one-slot memory: accumulates via M+/M−, cleared by MR button. */
     internal var memoryValue: Double = 0.0
     val calculationHistory = mutableListOf<String>()
@@ -197,7 +193,7 @@ class MainActivity : AppCompatActivity() {
             override fun handleOnBackPressed() {
                 when {
                     aboutOverlay != null -> dismissAboutInfoWindow()
-                    currentWorkspacePage == 0 && (fragmentAt(5) as? FunctionCatalogFragment)?.handleBackPressed() == true -> Unit
+                    currentWorkspacePage == 0 && (fragmentAt(6) as? FunctionCatalogFragment)?.handleBackPressed() == true -> Unit
                     currentWorkspacePage == 0 && (fragmentAt(5) as? CurrencyFragment)?.handleBackPressed() == true -> Unit
                     currentWorkspacePage == 1 && workspaceFragment?.handleBackPressed() == true -> Unit
                     currentWorkspacePage == 1 -> switchWorkspacePage(0)
@@ -632,7 +628,6 @@ class MainActivity : AppCompatActivity() {
                 is HistoryFragment -> frag.springSettle(direction, clampedDist)
                 is FunctionCatalogFragment -> frag.springSettle(direction, clampedDist)
                 is CurrencyFragment -> frag.springSettle(direction, clampedDist)
-                is CurrencyFragment -> frag.springSettle(direction, clampedDist)
                 else -> if (attempt < 4) {
                     binding.viewPager.postDelayed({ invokeFragmentSpring(attempt + 1) }, 24L)
                 }
@@ -712,17 +707,15 @@ class MainActivity : AppCompatActivity() {
             runOnUiThread {
                 if (outcome.ok) {
                     lastAnswer = outcome.value
-                    currentPrimaryInput = outcome.value
-                    exprStatement = ""
+                    expressionText = outcome.value
+                    cursorPos = outcome.value.length
                     val resultLine = "$displayLine = ${outcome.value} [${outcome.unit}]"
                     calculationHistory.add(0, resultLine)
                     refreshHistoryUI()
                     currentSecondaryFormula = resultLine
-                    binding.tvPrimaryDisplay.text = outcome.value
+                    refreshPrimaryDisplay(pulse = true)
                     binding.tvSecondaryDisplay.text = resultLine
-                    displaySpringPulse(binding.tvPrimaryDisplay, 0.05f)
                     displaySpringPulse(binding.tvSecondaryDisplay, 0.035f)
-                    (fragmentAt(6) as? CurrencyFragment)?.updatePreviewAndRate()
                 } else {
                     val msg = outcome.error ?: "Conversion error"
                     val errLine = if (msg.length > 40) "⚠ ${msg.take(37)}…" else "Error: $msg"
@@ -734,50 +727,46 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    fun refreshPrimaryDisplay(pulse: Boolean = true) {
+        val shown = expressionText.ifEmpty { "0.0" }
+        binding.tvPrimaryDisplay.text = shown
+        val safeCursor = if (expressionText.isEmpty()) shown.length else cursorPos.coerceIn(0, expressionText.length)
+        if (expressionText.isNotEmpty()) {
+            cursorPos = safeCursor
+        }
+        binding.tvPrimaryDisplay.setCursorPosition(safeCursor)
+        if (pulse) {
+            displaySpringPulse(binding.tvPrimaryDisplay, 0.05f)
+        }
+        (fragmentAt(5) as? CurrencyFragment)?.updatePreviewAndRate()
+    }
+
     fun refreshFunctionCatalogUI() {
-        (fragmentAt(5) as? FunctionCatalogFragment)?.reloadCatalogFromEngine()
+        (fragmentAt(6) as? FunctionCatalogFragment)?.reloadCatalogFromEngine()
     }
 
     fun onCatalogItemClicked(item: CalculatorCatalogItem) {
-        when (item.kind) {
-            "op" -> {
-                if (currentPrimaryInput != "0.0") {
-                    exprStatement += currentPrimaryInput
-                    currentPrimaryInput = "0.0"
-                }
-                val opIns = if (item.name.firstOrNull()?.isLetterOrDigit() == true) {
-                    " ${item.name} "
-                } else {
-                    item.name
-                }
-                exprStatement = exprStatement.trimEnd() + opIns
-            }
-            "const" -> {
-                if (currentPrimaryInput != "0.0") {
-                    exprStatement += currentPrimaryInput
-                    currentPrimaryInput = "0.0"
-                    if (exprStatement.isNotEmpty() && exprStatement.trimEnd().last() !in "+-×÷/*^,(") {
-                        exprStatement += "×"
-                    }
-                }
-                exprStatement += item.name
-            }
+        if (expressionText == "0.0") {
+            expressionText = ""
+            cursorPos = 0
+        }
+        val p = cursorPos.coerceIn(0, expressionText.length)
+        val before = expressionText.substring(0, p)
+        val after = expressionText.substring(p)
+        val prevChar = before.trimEnd().lastOrNull()
+        val needsMul = prevChar != null && prevChar !in "+-×÷/*^,("
+
+        val insertion = when (item.kind) {
+            "op" -> if (item.name.firstOrNull()?.isLetterOrDigit() == true) " ${item.name} " else item.name
+            "const" -> (if (needsMul) "×" else "") + item.name
             else -> {
-                if (currentPrimaryInput != "0.0") {
-                    exprStatement += currentPrimaryInput
-                    currentPrimaryInput = "0.0"
-                    if (exprStatement.isNotEmpty() && exprStatement.trimEnd().last() !in "+-×÷/*^,(") {
-                        exprStatement += "×"
-                    }
-                }
                 val isZeroArg = item.signature.contains("${item.name}()")
-                exprStatement += if (isZeroArg) "${item.name}()" else "${item.name}("
+                (if (needsMul) "×" else "") + if (isZeroArg) "${item.name}()" else "${item.name}("
             }
         }
-        binding.tvPrimaryDisplay.text =
-            if (currentPrimaryInput == "0.0") exprStatement.trimEnd().ifBlank { "0.0" }
-            else (exprStatement + currentPrimaryInput).ifBlank { "0.0" }
-        displaySpringPulse(binding.tvPrimaryDisplay, 0.05f)
+        expressionText = before + insertion + after
+        cursorPos = p + insertion.length
+        refreshPrimaryDisplay(pulse = true)
     }
 
     internal fun fragmentAt(position: Int): Fragment? =
@@ -804,15 +793,15 @@ class MainActivity : AppCompatActivity() {
         } else trimmed
         if (value.isEmpty()) return
 
-        currentPrimaryInput =
-            if (currentPrimaryInput == "0.0" || currentPrimaryInput.isBlank()) value
-            else currentPrimaryInput + value
-        cursorPos = currentPrimaryInput.length
-
-        binding.tvPrimaryDisplay.text =
-            if (currentPrimaryInput == "0.0") exprStatement.trimEnd().ifBlank { "0.0" }
-            else (exprStatement + currentPrimaryInput).ifBlank { "0.0" }
-        displaySpringPulse(binding.tvPrimaryDisplay, 0.05f)
+        if (expressionText.isEmpty() || expressionText == "0.0") {
+            expressionText = value
+            cursorPos = value.length
+        } else {
+            val p = cursorPos.coerceIn(0, expressionText.length)
+            expressionText = expressionText.substring(0, p) + value + expressionText.substring(p)
+            cursorPos = p + value.length
+        }
+        refreshPrimaryDisplay(pulse = true)
     }
 
     internal fun setupInteractions() {
@@ -871,13 +860,28 @@ class MainActivity : AppCompatActivity() {
             switchWorkspacePage(1)
         }
 
+        binding.tvPrimaryDisplay.onCursorTappedListener = { tappedOffset ->
+            if (expressionText.isEmpty()) {
+                cursorPos = 0
+                binding.tvPrimaryDisplay.setCursorPosition(binding.tvPrimaryDisplay.text?.length ?: 0)
+            } else {
+                cursorPos = tappedOffset.coerceIn(0, expressionText.length)
+                binding.tvPrimaryDisplay.setCursorPosition(cursorPos)
+            }
+        }
+        binding.tvPrimaryDisplay.setCursorPosition(binding.tvPrimaryDisplay.text?.length ?: 0)
+
         binding.tvMrValue.setOnClickListener {
             val recalled = formatValue(memoryValue)
-            currentPrimaryInput = recalled
-            binding.tvPrimaryDisplay.text =
-                if (currentPrimaryInput == "0.0") exprStatement.trimEnd().ifBlank { "0.0" }
-                else (exprStatement + currentPrimaryInput).ifBlank { "0.0" }
-            displaySpringPulse(binding.tvPrimaryDisplay, 0.05f)
+            if (expressionText.isEmpty() || expressionText == "0.0") {
+                expressionText = recalled
+                cursorPos = recalled.length
+            } else {
+                val p = cursorPos.coerceIn(0, expressionText.length)
+                expressionText = expressionText.substring(0, p) + recalled + expressionText.substring(p)
+                cursorPos = p + recalled.length
+            }
+            refreshPrimaryDisplay(pulse = true)
             displaySpringPulse(binding.tvMrValue, 0.05f)
         }
 

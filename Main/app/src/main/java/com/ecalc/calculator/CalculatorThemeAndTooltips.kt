@@ -109,6 +109,7 @@ internal fun MainActivity.applyThemeColors(dark: Boolean) {
         setStroke(strokePx, Color.parseColor(if (dark) "#26464A" else "#F2C5BC"))
     }
     binding.tvPrimaryDisplay.setTextColor(Color.parseColor(primaryText))
+    binding.tvPrimaryDisplay.setCursorColor(Color.parseColor(accentColor))
     binding.tvSecondaryDisplay.setTextColor(Color.parseColor(secondaryText))
     binding.tvMrClusterTitle.setTextColor(Color.parseColor(secondaryText))
     binding.tvMrValue.setTextColor(Color.parseColor(secondaryText))
