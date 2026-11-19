@@ -40,6 +40,7 @@ class CurrencyFragment : Fragment() {
     private var mainContent: LinearLayout? = null
     private var tvTitle: TextView? = null
     private var tvRateStatus: TextView? = null
+    private var tvCallInfo: TextView? = null
 
     private var fromCard: LinearLayout? = null
     private var tvFromLabel: TextView? = null
@@ -183,7 +184,25 @@ class CurrencyFragment : Fragment() {
         pairRow.addView(toCard, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         content.addView(pairRow)
 
-        // 3. Full-height 5x4 Currency Keypad filling all remaining vertical real estate
+        // 3. Small info strip: which engine call `=` will make with the current From/To.
+        tvCallInfo = TextView(ctx).apply {
+            textSize = 11f
+            typeface = Typeface.create(Typeface.MONOSPACE, Typeface.NORMAL)
+            maxLines = 1
+            setPadding(dp(10f), dp(5f), dp(10f), dp(5f))
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                marginStart = dp(4f)
+                marginEnd = dp(4f)
+                bottomMargin = dp(6f)
+            }
+        }
+        content.addView(tvCallInfo)
+
+        // 4. Full-height 4x4 Currency Keypad filling all remaining vertical real estate.
+        //    Every key writes plainly into the main expression; `=` converts it.
         val keyGrid = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             layoutParams = LinearLayout.LayoutParams(
@@ -194,10 +213,10 @@ class CurrencyFragment : Fragment() {
         }
         quickKeys.clear()
         val rows = listOf(
-            listOf("7", "8", "9", "÷", "AC"),
-            listOf("4", "5", "6", "×", "\u232B"),
-            listOf("1", "2", "3", "-", "insert"),
-            listOf("0", ".", "()", "+", "=")
+            listOf("7", "8", "9", "\u232B"),
+            listOf("4", "5", "6", "()"),
+            listOf("1", "2", "3", ","),
+            listOf("0", ".", "AC", "=")
         )
         for (row in rows) {
             val rowLl = LinearLayout(ctx).apply {
@@ -211,14 +230,12 @@ class CurrencyFragment : Fragment() {
             for (label in row) {
                 val role = when (label) {
                     "=" -> KeyRole.PRIMARY_EQUALS
-                    "insert", "÷", "×", "-", "+" -> KeyRole.OPERATOR
                     "AC", "\u232B", "()" -> KeyRole.UTILITY
                     else -> KeyRole.DIGIT
                 }
                 val btn = NeumorphicKeyView(ctx).apply {
                     text = label
                     textSize = when (label) {
-                        "insert" -> 12.5f
                         "AC", "()" -> 14f
                         else -> 16.5f
                     }
@@ -230,33 +247,18 @@ class CurrencyFragment : Fragment() {
                         val a = activity
                         when (label) {
                             "=" -> {
-                                val expr = a.expressionText.trim()
-                                if (expr.contains("currency_convert(") || expr.contains(" into ")) {
-                                    a.evaluateCurrent()
-                                } else {
-                                    val amt = expr.ifBlank { "0" }
-                                    a.evaluateCurrencyConversion(amt, fromCode, toCode)
-                                }
-                            }
-                            "insert" -> {
-                                val current = if (a.expressionText == "0.0") "" else a.expressionText.trim()
-                                val amount = current.ifBlank { "1" }
-                                val formula = "currency_convert($amount, \"$fromCode\", \"$toCode\")"
-                                a.expressionText = formula
-                                a.cursorPos = "currency_convert($amount".length
-                                a.refreshPrimaryDisplay(pulse = true)
+                                val expr = a.expressionText.trim().ifBlank { "0" }
+                                a.evaluateCurrencyConversion(expr, fromCode, toCode)
                             }
                             "()" -> a.onSmartBracketClicked()
-                            "×" -> a.onKeyClicked("x")
                             else -> a.onKeyClicked(label)
                         }
                         updatePreviewAndRate()
                     }
                     val tooltip = when (label) {
-                        "insert" -> "Insert — wraps the current expression into currency_convert(amount, \"$fromCode\", \"$toCode\") for mixing with other math."
-                        "=" -> "= — evaluates the currency conversion ($fromCode → $toCode) and records it to History."
+                        "=" -> "= — converts the expression in the display from $fromCode to $toCode and records it to History."
                         "()" -> "( ) — smart bracket: opens or closes parentheses at the cursor."
-                        else -> activity.keyDescriptionFor(if (label == "×") "x" else label)
+                        else -> activity.keyDescriptionFor(label)
                     }
                     setOnLongClickListener { true }
                     holdListener = { held ->
@@ -349,6 +351,7 @@ class CurrencyFragment : Fragment() {
             val rateStr = if (unitRate.isNaN()) "—" else formatCompact(unitRate)
             tvRateStatus?.text = "1 $fromCode = $rateStr $toCode • ${CurrencyConverter.lastProviderName}"
         }
+        tvCallInfo?.text = "currency_convert(${expr.ifBlank { "0" }}, \"$fromCode\", \"$toCode\")"
     }
 
     private fun formatCompact(v: Double): String {
@@ -393,6 +396,14 @@ class CurrencyFragment : Fragment() {
         tvToCode?.setTextColor(primaryText)
         tvFromName?.setTextColor(secondaryText)
         tvToName?.setTextColor(secondaryText)
+
+        tvCallInfo?.setTextColor(secondaryText)
+        tvCallInfo?.background = GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            cornerRadius = 8f * density
+            setColor(pillBg)
+            setStroke(strokePx, cardStroke)
+        }
 
         btnSwap?.isDarkThemeMode = dark
         quickKeys.forEach { it.isDarkThemeMode = dark }

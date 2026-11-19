@@ -692,8 +692,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun evaluateCurrencyConversion(amountExpr: String, fromCode: String, toCode: String) {
-        val displayLine = "$amountExpr $fromCode into $toCode"
-        binding.tvSecondaryDisplay.text = "$displayLine ="
+        val callText = "currency_convert(${amountExpr.ifBlank { "0" }}, \"$fromCode\", \"$toCode\")"
+        binding.tvSecondaryDisplay.text = "$callText ="
         displaySpringPulse(binding.tvPrimaryDisplay, 0.05f)
         displaySpringPulse(binding.tvSecondaryDisplay, 0.04f)
 
@@ -709,7 +709,7 @@ class MainActivity : AppCompatActivity() {
                     lastAnswer = outcome.value
                     expressionText = outcome.value
                     cursorPos = outcome.value.length
-                    val resultLine = "$displayLine = ${outcome.value} [${outcome.unit}]"
+                    val resultLine = "$callText = ${outcome.value} [${outcome.unit}]"
                     calculationHistory.add(0, resultLine)
                     refreshHistoryUI()
                     currentSecondaryFormula = resultLine
