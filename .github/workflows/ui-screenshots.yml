@@ -104,6 +104,11 @@ jobs:
             # absolute paths throughout.
             adb shell cmd uimode night ${{ matrix.dark }}
             adb install -r "$(find "$GITHUB_WORKSPACE/apk" -name '*.apk' | head -1)"
+            # The app's light/dark switcher is its OWN persisted preference
+            # (ecalc_prefs -> dark_mode) and deliberately ignores the system night
+            # mode, so `cmd uimode night yes` alone produced light screenshots for
+            # the "dark" matrix leg. Seed the preference before the first launch.
+            if [ "${{ matrix.dark }}" = "yes" ]; then adb shell "run-as com.amitutilitysoft.mepcalc sh -c 'mkdir -p shared_prefs; cat > shared_prefs/ecalc_prefs.xml'" < "$GITHUB_WORKSPACE/.github/ci/dark_mode_prefs.xml"; fi
             adb shell am start -W -n com.amitutilitysoft.mepcalc/.LauncherDark
             sleep 15
             mkdir -p "$GITHUB_WORKSPACE/shots"
