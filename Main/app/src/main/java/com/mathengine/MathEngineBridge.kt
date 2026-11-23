@@ -1,6 +1,6 @@
 package com.mathengine
 
-import com.ecalc.CurrencyConverter
+import com.amitutilitysoft.mepcalc.CurrencyConverter
 import java.io.Closeable
 
 /**

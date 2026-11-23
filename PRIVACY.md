@@ -4,7 +4,7 @@
 
 MEP Calc ("the app") is developed and published by **Amit UtilitySoft** ("we",
 "us"). This policy explains what the app does with data. It applies to the
-Android application distributed under the package name `com.ecalc`.
+Android application distributed under the package name `com.amitutilitysoft.mepcalc`.
 
 ## Summary
 

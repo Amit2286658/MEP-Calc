@@ -4,11 +4,11 @@ plugins {
 }
 
 android {
-  namespace = "com.ecalc"
+  namespace = "com.amitutilitysoft.mepcalc"
   compileSdk { version = release(36) { minorApiLevel = 1 } }
 
   defaultConfig {
-    applicationId = "com.ecalc"
+    applicationId = "com.amitutilitysoft.mepcalc"
     minSdk = 26
     targetSdk = 36
     // Overridable by CI: -PmepVersionCode=N -PmepVersionName=1.0.N (release-apk

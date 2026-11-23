@@ -198,7 +198,7 @@
 
             <!-- Primary display — height tracks the section so tiny free-form
                  windows shrink it instead of letting it overlap the MR row -->
-            <com.ecalc.ExpressionDisplayView
+            <com.amitutilitysoft.mepcalc.ExpressionDisplayView
                 android:id="@+id/tvPrimaryDisplay"
                 android:fontFeatureSettings="tnum"
                 android:layout_width="0dp"
@@ -265,7 +265,7 @@
                     android:gravity="center_vertical"
                     android:orientation="horizontal">
 
-                    <com.ecalc.NeumorphicKeyView
+                    <com.amitutilitysoft.mepcalc.NeumorphicKeyView
                         android:id="@+id/btnMrClear"
                         android:layout_width="74dp"
                         android:layout_height="42dp"

@@ -104,7 +104,7 @@ jobs:
             # absolute paths throughout.
             adb shell cmd uimode night ${{ matrix.dark }}
             adb install -r "$(find "$GITHUB_WORKSPACE/apk" -name '*.apk' | head -1)"
-            adb shell am start -W -n com.ecalc/.LauncherDark
+            adb shell am start -W -n com.amitutilitysoft.mepcalc/.LauncherDark
             sleep 15
             mkdir -p "$GITHUB_WORKSPACE/shots"
             adb exec-out screencap -p > "$GITHUB_WORKSPACE/shots/01-home.png"

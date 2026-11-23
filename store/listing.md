@@ -84,15 +84,16 @@ MEP Calc is open source. The engine is available at
 https://github.com/Amit2286658/Math-Engine-MEP
 ```
 
-## Version notes (build 1.0.13)
+## Version notes (build 1.0.14)
 
 ```
-• Universal build: the native math engine now ships for 64-bit ARM, 32-bit ARM
-  and x86_64, so the app runs on every supported device instead of crashing on
-  32-bit and emulator-only configurations.
+• New application ID (com.amitutilitysoft.mepcalc) so the app is clearly
+  identified as MEP Calc by Amit UtilitySoft.
+• Universal native math engine for 64-bit ARM, 32-bit ARM and x86_64.
 • The function library (prime and number theory, number-to-words, memory and
-  storage conversion) is now bundled with the app and loads on first launch
-  even without a network connection.
+  storage conversion) ships inside the app and loads on first launch offline.
+• Patch updates published on GitHub are picked up automatically on the next
+  launch; the bundled copy is only a fallback.
 • New: computer memory / storage size converter (bit, byte, KB–PB, KiB–PiB).
 • Privacy policy link added to the in-app info window.
 ```
@@ -103,6 +104,6 @@ https://github.com/Amit2286658/Math-Engine-MEP
 2. Upload at least 4 phone screenshots and 2 tablet screenshots.
 3. Paste the short and full description above.
 4. Paste the privacy policy URL.
-5. Upload `ecalc-release-v13.apk` (signed, universal, from the
-   `ecalc-release-apk-v13` CI artifact) — **not** any `*-debug-*` or
+5. Upload `ecalc-release-v14.apk` (signed, universal, from the
+   `ecalc-release-apk-v14` CI artifact) — **not** any `*-debug-*` or
    `*CI-ONLY*` artifact.
