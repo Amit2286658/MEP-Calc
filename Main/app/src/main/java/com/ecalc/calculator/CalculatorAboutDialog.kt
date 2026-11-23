@@ -298,6 +298,9 @@ fun MainActivity.showAboutInfoWindow() {
     addInfoBullet(authorBox, "Engine Docs Guide", "GitHub.com/Math-Engine-MEP (Bundled in-project below)") {
         openExternalUri("https://github.com/Amit2286658/Math-Engine-MEP")
     }
+    addInfoBullet(authorBox, "Privacy Policy", "No accounts, no ads, no tracking") {
+        openExternalUri("https://github.com/Amit2286658/MEP-Calc/blob/main/PRIVACY.md")
+    }
 
     val tvContactNote = TextView(this).apply {
         text = "Contact the developer on the email address (amitkumar13234353@gmail.com) for any query/bug report/feature request."

@@ -1,7 +1,8 @@
 name: release-apk
 
-# Builds a RELEASE APK (arm64 engine, minification off so JNI symbol names are
-# untouched) and publishes it as the `ecalc-release-apk-vN` artifact, signed.
+# Builds a UNIVERSAL RELEASE APK (arm64-v8a + armeabi-v7a + x86_64 engine,
+# minification off so JNI symbol names are untouched) and publishes it as the
+# `ecalc-release-apk-vN` artifact, signed.
 #
 # Versioning: every signed release bumps the repo-root `release.version` by 1
 # (versionCode = N, versionName = 1.0.N) and commits the bump back to main.
@@ -51,7 +52,7 @@ jobs:
       - name: Accept Android SDK licenses
         run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null 2>&1 || true
 
-      - name: Build libmathengine.so from vendored C11 sources (arm64)
+      - name: Build libmathengine.so (arm64-v8a + armeabi-v7a + x86_64)
         run: |
           set -eu
           NDK_DIR="$(ls -d "$ANDROID_HOME"/ndk/* 2>/dev/null | sort -V | tail -1 || true)"
@@ -59,8 +60,13 @@ jobs:
             "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;27.0.12077973" > /dev/null
             NDK_DIR="$ANDROID_HOME/ndk/27.0.12077973"
           fi
-          (cd app/src/main/cpp/mathengine && sh tools/build_android_arm64.sh "$NDK_DIR/toolchains/llvm/prebuilt/linux-x86_64/bin")
-          cp app/src/main/cpp/mathengine/precompiled/arm64-v8a/libmathengine.so app/src/main/jniLibs/arm64-v8a/libmathengine.so
+          # Universal engine: the signed APK must actually contain the native
+          # engine for every ABI it declares, otherwise 32-bit / x86 devices
+          # (and emulator-based store QA) install it and crash on launch.
+          sh app/src/main/cpp/build_engine_abi.sh \
+            "$NDK_DIR/toolchains/llvm/prebuilt/linux-x86_64/bin" \
+            arm64-v8a armeabi-v7a x86_64
+          ls -l app/src/main/jniLibs/*/libmathengine.so
 
       - name: Compute release version (bump release.version by 1)
         run: |
@@ -76,7 +82,7 @@ jobs:
           chmod +x gradlew
           ok=0
           for i in 1 2 3 4 5; do
-            if ./gradlew assembleRelease -PusePrebuiltMepSo -PmepVersionCode="$VER" -PmepVersionName="1.0.$VER" --console=plain; then ok=1; break; fi
+            if ./gradlew assembleRelease -PusePrebuiltMepSo -PmepAbis=arm64-v8a,armeabi-v7a,x86_64 -PmepVersionCode="$VER" -PmepVersionName="1.0.$VER" --console=plain; then ok=1; break; fi
             echo "gradlew attempt $i failed — retrying in 90s"
             sleep 90
           done

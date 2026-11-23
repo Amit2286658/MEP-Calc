@@ -1,0 +1,392 @@
+# ==============================================================================
+# patches/memory.math — Computer Memory / Storage Size Conversion (`memory`)
+# ==============================================================================
+# Converts between bit and byte based storage units using one shared base of BITS
+# (1 byte = 8 bits). Two prefix families are supported and kept distinct:
+#   • SI decimal   KB = 1000 B, MB = 1000 KB, ... (storage vendors, networking)
+#   • IEC binary   KiB = 1024 B, MiB = 1024 KiB, ... (RAM, OS file sizes)
+#
+# Three ways to convert:
+#   1. Unit suffixes + `into`:   1.5 GB into MiB   /   8 bit into byte
+#   2. Plain function layer:     memory_convert(1.5, "GB", "MiB")
+#   3. Formatting helpers:       memory_convert_str(512, "MB", "GiB")
+#                                memory_human(1610612736)  -> "1.50 GiB"
+#
+# Exact for the full 64-bit-ish range representable in an IEEE-754 double.
+# ==============================================================================
+[memory]
+<[arith]
+<[string]
+
+# ==============================================================================
+# 1. Unit markers (every marker carries its factor in BITS)
+# ==============================================================================
+# -- bits --
+(x) "bit" :95 -> real, bits = x * 1
+(x) "bits" :95 -> real, bits = x * 1
+(x) "b" :95 -> real, bits = x * 1
+
+# -- bytes --
+(x) "byte" :95 -> real, bytes = x * 8
+(x) "bytes" :95 -> real, bytes = x * 8
+(x) "B" :95 -> real, bytes = x * 8
+
+# -- kilobytes --
+(x) "KB" :95 -> real, kilobytes = x * 8000
+(x) "kB" :95 -> real, kilobytes = x * 8000
+(x) "kb" :95 -> real, kilobytes = x * 8000
+(x) "kilobyte" :95 -> real, kilobytes = x * 8000
+(x) "kilobytes" :95 -> real, kilobytes = x * 8000
+
+# -- megabytes --
+(x) "MB" :95 -> real, megabytes = x * 8000000
+(x) "mb" :95 -> real, megabytes = x * 8000000
+(x) "megabyte" :95 -> real, megabytes = x * 8000000
+(x) "megabytes" :95 -> real, megabytes = x * 8000000
+
+# -- gigabytes --
+(x) "GB" :95 -> real, gigabytes = x * 8000000000
+(x) "gb" :95 -> real, gigabytes = x * 8000000000
+(x) "gigabyte" :95 -> real, gigabytes = x * 8000000000
+(x) "gigabytes" :95 -> real, gigabytes = x * 8000000000
+
+# -- terabytes --
+(x) "TB" :95 -> real, terabytes = x * 8000000000000
+(x) "tb" :95 -> real, terabytes = x * 8000000000000
+(x) "terabyte" :95 -> real, terabytes = x * 8000000000000
+(x) "terabytes" :95 -> real, terabytes = x * 8000000000000
+
+# -- petabytes --
+(x) "PB" :95 -> real, petabytes = x * 8000000000000000
+(x) "pb" :95 -> real, petabytes = x * 8000000000000000
+(x) "petabyte" :95 -> real, petabytes = x * 8000000000000000
+(x) "petabytes" :95 -> real, petabytes = x * 8000000000000000
+
+# -- kibibytes --
+(x) "KiB" :95 -> real, kibibytes = x * 8192
+(x) "kib" :95 -> real, kibibytes = x * 8192
+(x) "kibibyte" :95 -> real, kibibytes = x * 8192
+(x) "kibibytes" :95 -> real, kibibytes = x * 8192
+
+# -- mebibytes --
+(x) "MiB" :95 -> real, mebibytes = x * 8388608
+(x) "mib" :95 -> real, mebibytes = x * 8388608
+(x) "mebibyte" :95 -> real, mebibytes = x * 8388608
+(x) "mebibytes" :95 -> real, mebibytes = x * 8388608
+
+# -- gibibytes --
+(x) "GiB" :95 -> real, gibibytes = x * 8589934592
+(x) "gib" :95 -> real, gibibytes = x * 8589934592
+(x) "gibibyte" :95 -> real, gibibytes = x * 8589934592
+(x) "gibibytes" :95 -> real, gibibytes = x * 8589934592
+
+# -- tebibytes --
+(x) "TiB" :95 -> real, tebibytes = x * 8796093022208
+(x) "tib" :95 -> real, tebibytes = x * 8796093022208
+(x) "tebibyte" :95 -> real, tebibytes = x * 8796093022208
+(x) "tebibytes" :95 -> real, tebibytes = x * 8796093022208
+
+# -- pebibytes --
+(x) "PiB" :95 -> real, pebibytes = x * 9007199254740992
+(x) "pib" :95 -> real, pebibytes = x * 9007199254740992
+(x) "pebibyte" :95 -> real, pebibytes = x * 9007199254740992
+(x) "pebibytes" :95 -> real, pebibytes = x * 9007199254740992
+
+# ==============================================================================
+# 2. `from into to` conversion overloads (all cross-family pairs)
+#    `with_unit(x / y, y)` divides the BITS-normalized left value by the
+#    BITS value of one target unit and re-tags the result with the target group.
+#    Same-group conversions are handled by stdlib conversions.math.
+# ==============================================================================
+# ---- bits rows ----
+(x: real, bits) "into" (y: real, bytes) :>55 = with_unit(x / y, y)
+(x: real, bits) "into" (y: real, kilobytes) :>55 = with_unit(x / y, y)
+(x: real, bits) "into" (y: real, megabytes) :>55 = with_unit(x / y, y)
+(x: real, bits) "into" (y: real, gigabytes) :>55 = with_unit(x / y, y)
+(x: real, bits) "into" (y: real, terabytes) :>55 = with_unit(x / y, y)
+(x: real, bits) "into" (y: real, petabytes) :>55 = with_unit(x / y, y)
+(x: real, bits) "into" (y: real, kibibytes) :>55 = with_unit(x / y, y)
+(x: real, bits) "into" (y: real, mebibytes) :>55 = with_unit(x / y, y)
+(x: real, bits) "into" (y: real, gibibytes) :>55 = with_unit(x / y, y)
+(x: real, bits) "into" (y: real, tebibytes) :>55 = with_unit(x / y, y)
+(x: real, bits) "into" (y: real, pebibytes) :>55 = with_unit(x / y, y)
+
+# ---- bytes rows ----
+(x: real, bytes) "into" (y: real, bits) :>55 = with_unit(x / y, y)
+(x: real, bytes) "into" (y: real, kilobytes) :>55 = with_unit(x / y, y)
+(x: real, bytes) "into" (y: real, megabytes) :>55 = with_unit(x / y, y)
+(x: real, bytes) "into" (y: real, gigabytes) :>55 = with_unit(x / y, y)
+(x: real, bytes) "into" (y: real, terabytes) :>55 = with_unit(x / y, y)
+(x: real, bytes) "into" (y: real, petabytes) :>55 = with_unit(x / y, y)
+(x: real, bytes) "into" (y: real, kibibytes) :>55 = with_unit(x / y, y)
+(x: real, bytes) "into" (y: real, mebibytes) :>55 = with_unit(x / y, y)
+(x: real, bytes) "into" (y: real, gibibytes) :>55 = with_unit(x / y, y)
+(x: real, bytes) "into" (y: real, tebibytes) :>55 = with_unit(x / y, y)
+(x: real, bytes) "into" (y: real, pebibytes) :>55 = with_unit(x / y, y)
+
+# ---- kilobytes rows ----
+(x: real, kilobytes) "into" (y: real, bits) :>55 = with_unit(x / y, y)
+(x: real, kilobytes) "into" (y: real, bytes) :>55 = with_unit(x / y, y)
+(x: real, kilobytes) "into" (y: real, megabytes) :>55 = with_unit(x / y, y)
+(x: real, kilobytes) "into" (y: real, gigabytes) :>55 = with_unit(x / y, y)
+(x: real, kilobytes) "into" (y: real, terabytes) :>55 = with_unit(x / y, y)
+(x: real, kilobytes) "into" (y: real, petabytes) :>55 = with_unit(x / y, y)
+(x: real, kilobytes) "into" (y: real, kibibytes) :>55 = with_unit(x / y, y)
+(x: real, kilobytes) "into" (y: real, mebibytes) :>55 = with_unit(x / y, y)
+(x: real, kilobytes) "into" (y: real, gibibytes) :>55 = with_unit(x / y, y)
+(x: real, kilobytes) "into" (y: real, tebibytes) :>55 = with_unit(x / y, y)
+(x: real, kilobytes) "into" (y: real, pebibytes) :>55 = with_unit(x / y, y)
+
+# ---- megabytes rows ----
+(x: real, megabytes) "into" (y: real, bits) :>55 = with_unit(x / y, y)
+(x: real, megabytes) "into" (y: real, bytes) :>55 = with_unit(x / y, y)
+(x: real, megabytes) "into" (y: real, kilobytes) :>55 = with_unit(x / y, y)
+(x: real, megabytes) "into" (y: real, gigabytes) :>55 = with_unit(x / y, y)
+(x: real, megabytes) "into" (y: real, terabytes) :>55 = with_unit(x / y, y)
+(x: real, megabytes) "into" (y: real, petabytes) :>55 = with_unit(x / y, y)
+(x: real, megabytes) "into" (y: real, kibibytes) :>55 = with_unit(x / y, y)
+(x: real, megabytes) "into" (y: real, mebibytes) :>55 = with_unit(x / y, y)
+(x: real, megabytes) "into" (y: real, gibibytes) :>55 = with_unit(x / y, y)
+(x: real, megabytes) "into" (y: real, tebibytes) :>55 = with_unit(x / y, y)
+(x: real, megabytes) "into" (y: real, pebibytes) :>55 = with_unit(x / y, y)
+
+# ---- gigabytes rows ----
+(x: real, gigabytes) "into" (y: real, bits) :>55 = with_unit(x / y, y)
+(x: real, gigabytes) "into" (y: real, bytes) :>55 = with_unit(x / y, y)
+(x: real, gigabytes) "into" (y: real, kilobytes) :>55 = with_unit(x / y, y)
+(x: real, gigabytes) "into" (y: real, megabytes) :>55 = with_unit(x / y, y)
+(x: real, gigabytes) "into" (y: real, terabytes) :>55 = with_unit(x / y, y)
+(x: real, gigabytes) "into" (y: real, petabytes) :>55 = with_unit(x / y, y)
+(x: real, gigabytes) "into" (y: real, kibibytes) :>55 = with_unit(x / y, y)
+(x: real, gigabytes) "into" (y: real, mebibytes) :>55 = with_unit(x / y, y)
+(x: real, gigabytes) "into" (y: real, gibibytes) :>55 = with_unit(x / y, y)
+(x: real, gigabytes) "into" (y: real, tebibytes) :>55 = with_unit(x / y, y)
+(x: real, gigabytes) "into" (y: real, pebibytes) :>55 = with_unit(x / y, y)
+
+# ---- terabytes rows ----
+(x: real, terabytes) "into" (y: real, bits) :>55 = with_unit(x / y, y)
+(x: real, terabytes) "into" (y: real, bytes) :>55 = with_unit(x / y, y)
+(x: real, terabytes) "into" (y: real, kilobytes) :>55 = with_unit(x / y, y)
+(x: real, terabytes) "into" (y: real, megabytes) :>55 = with_unit(x / y, y)
+(x: real, terabytes) "into" (y: real, gigabytes) :>55 = with_unit(x / y, y)
+(x: real, terabytes) "into" (y: real, petabytes) :>55 = with_unit(x / y, y)
+(x: real, terabytes) "into" (y: real, kibibytes) :>55 = with_unit(x / y, y)
+(x: real, terabytes) "into" (y: real, mebibytes) :>55 = with_unit(x / y, y)
+(x: real, terabytes) "into" (y: real, gibibytes) :>55 = with_unit(x / y, y)
+(x: real, terabytes) "into" (y: real, tebibytes) :>55 = with_unit(x / y, y)
+(x: real, terabytes) "into" (y: real, pebibytes) :>55 = with_unit(x / y, y)
+
+# ---- petabytes rows ----
+(x: real, petabytes) "into" (y: real, bits) :>55 = with_unit(x / y, y)
+(x: real, petabytes) "into" (y: real, bytes) :>55 = with_unit(x / y, y)
+(x: real, petabytes) "into" (y: real, kilobytes) :>55 = with_unit(x / y, y)
+(x: real, petabytes) "into" (y: real, megabytes) :>55 = with_unit(x / y, y)
+(x: real, petabytes) "into" (y: real, gigabytes) :>55 = with_unit(x / y, y)
+(x: real, petabytes) "into" (y: real, terabytes) :>55 = with_unit(x / y, y)
+(x: real, petabytes) "into" (y: real, kibibytes) :>55 = with_unit(x / y, y)
+(x: real, petabytes) "into" (y: real, mebibytes) :>55 = with_unit(x / y, y)
+(x: real, petabytes) "into" (y: real, gibibytes) :>55 = with_unit(x / y, y)
+(x: real, petabytes) "into" (y: real, tebibytes) :>55 = with_unit(x / y, y)
+(x: real, petabytes) "into" (y: real, pebibytes) :>55 = with_unit(x / y, y)
+
+# ---- kibibytes rows ----
+(x: real, kibibytes) "into" (y: real, bits) :>55 = with_unit(x / y, y)
+(x: real, kibibytes) "into" (y: real, bytes) :>55 = with_unit(x / y, y)
+(x: real, kibibytes) "into" (y: real, kilobytes) :>55 = with_unit(x / y, y)
+(x: real, kibibytes) "into" (y: real, megabytes) :>55 = with_unit(x / y, y)
+(x: real, kibibytes) "into" (y: real, gigabytes) :>55 = with_unit(x / y, y)
+(x: real, kibibytes) "into" (y: real, terabytes) :>55 = with_unit(x / y, y)
+(x: real, kibibytes) "into" (y: real, petabytes) :>55 = with_unit(x / y, y)
+(x: real, kibibytes) "into" (y: real, mebibytes) :>55 = with_unit(x / y, y)
+(x: real, kibibytes) "into" (y: real, gibibytes) :>55 = with_unit(x / y, y)
+(x: real, kibibytes) "into" (y: real, tebibytes) :>55 = with_unit(x / y, y)
+(x: real, kibibytes) "into" (y: real, pebibytes) :>55 = with_unit(x / y, y)
+
+# ---- mebibytes rows ----
+(x: real, mebibytes) "into" (y: real, bits) :>55 = with_unit(x / y, y)
+(x: real, mebibytes) "into" (y: real, bytes) :>55 = with_unit(x / y, y)
+(x: real, mebibytes) "into" (y: real, kilobytes) :>55 = with_unit(x / y, y)
+(x: real, mebibytes) "into" (y: real, megabytes) :>55 = with_unit(x / y, y)
+(x: real, mebibytes) "into" (y: real, gigabytes) :>55 = with_unit(x / y, y)
+(x: real, mebibytes) "into" (y: real, terabytes) :>55 = with_unit(x / y, y)
+(x: real, mebibytes) "into" (y: real, petabytes) :>55 = with_unit(x / y, y)
+(x: real, mebibytes) "into" (y: real, kibibytes) :>55 = with_unit(x / y, y)
+(x: real, mebibytes) "into" (y: real, gibibytes) :>55 = with_unit(x / y, y)
+(x: real, mebibytes) "into" (y: real, tebibytes) :>55 = with_unit(x / y, y)
+(x: real, mebibytes) "into" (y: real, pebibytes) :>55 = with_unit(x / y, y)
+
+# ---- gibibytes rows ----
+(x: real, gibibytes) "into" (y: real, bits) :>55 = with_unit(x / y, y)
+(x: real, gibibytes) "into" (y: real, bytes) :>55 = with_unit(x / y, y)
+(x: real, gibibytes) "into" (y: real, kilobytes) :>55 = with_unit(x / y, y)
+(x: real, gibibytes) "into" (y: real, megabytes) :>55 = with_unit(x / y, y)
+(x: real, gibibytes) "into" (y: real, gigabytes) :>55 = with_unit(x / y, y)
+(x: real, gibibytes) "into" (y: real, terabytes) :>55 = with_unit(x / y, y)
+(x: real, gibibytes) "into" (y: real, petabytes) :>55 = with_unit(x / y, y)
+(x: real, gibibytes) "into" (y: real, kibibytes) :>55 = with_unit(x / y, y)
+(x: real, gibibytes) "into" (y: real, mebibytes) :>55 = with_unit(x / y, y)
+(x: real, gibibytes) "into" (y: real, tebibytes) :>55 = with_unit(x / y, y)
+(x: real, gibibytes) "into" (y: real, pebibytes) :>55 = with_unit(x / y, y)
+
+# ---- tebibytes rows ----
+(x: real, tebibytes) "into" (y: real, bits) :>55 = with_unit(x / y, y)
+(x: real, tebibytes) "into" (y: real, bytes) :>55 = with_unit(x / y, y)
+(x: real, tebibytes) "into" (y: real, kilobytes) :>55 = with_unit(x / y, y)
+(x: real, tebibytes) "into" (y: real, megabytes) :>55 = with_unit(x / y, y)
+(x: real, tebibytes) "into" (y: real, gigabytes) :>55 = with_unit(x / y, y)
+(x: real, tebibytes) "into" (y: real, terabytes) :>55 = with_unit(x / y, y)
+(x: real, tebibytes) "into" (y: real, petabytes) :>55 = with_unit(x / y, y)
+(x: real, tebibytes) "into" (y: real, kibibytes) :>55 = with_unit(x / y, y)
+(x: real, tebibytes) "into" (y: real, mebibytes) :>55 = with_unit(x / y, y)
+(x: real, tebibytes) "into" (y: real, gibibytes) :>55 = with_unit(x / y, y)
+(x: real, tebibytes) "into" (y: real, pebibytes) :>55 = with_unit(x / y, y)
+
+# ---- pebibytes rows ----
+(x: real, pebibytes) "into" (y: real, bits) :>55 = with_unit(x / y, y)
+(x: real, pebibytes) "into" (y: real, bytes) :>55 = with_unit(x / y, y)
+(x: real, pebibytes) "into" (y: real, kilobytes) :>55 = with_unit(x / y, y)
+(x: real, pebibytes) "into" (y: real, megabytes) :>55 = with_unit(x / y, y)
+(x: real, pebibytes) "into" (y: real, gigabytes) :>55 = with_unit(x / y, y)
+(x: real, pebibytes) "into" (y: real, terabytes) :>55 = with_unit(x / y, y)
+(x: real, pebibytes) "into" (y: real, petabytes) :>55 = with_unit(x / y, y)
+(x: real, pebibytes) "into" (y: real, kibibytes) :>55 = with_unit(x / y, y)
+(x: real, pebibytes) "into" (y: real, mebibytes) :>55 = with_unit(x / y, y)
+(x: real, pebibytes) "into" (y: real, gibibytes) :>55 = with_unit(x / y, y)
+(x: real, pebibytes) "into" (y: real, tebibytes) :>55 = with_unit(x / y, y)
+
+# ==============================================================================
+# 3. String-code function layer (case-sensitive spellings; see memory_units())
+# ==============================================================================
+# @desc Returns how many BITS one unit represents. Accepts bit/byte family codes
+#       such as "bit", "byte", "KB", "MiB", "TB", "PiB".
+# @param unit: str — Unit code or long name (e.g. "GB", "gibibyte")
+# @return real — Bits per unit (0 when the code is unknown)
+memory_factor(unit: str) -> real = switch (trim(unit)) {
+    case "bit": 1
+    case "bits": 1
+    case "b": 1
+    case "byte": 8
+    case "bytes": 8
+    case "B": 8
+    case "KB": 8000
+    case "kB": 8000
+    case "kb": 8000
+    case "MB": 8000000
+    case "mb": 8000000
+    case "GB": 8000000000
+    case "gb": 8000000000
+    case "TB": 8000000000000
+    case "tb": 8000000000000
+    case "PB": 8000000000000000
+    case "pb": 8000000000000000
+    case "KiB": 8192
+    case "kib": 8192
+    case "MiB": 8388608
+    case "mib": 8388608
+    case "GiB": 8589934592
+    case "gib": 8589934592
+    case "TiB": 8796093022208
+    case "tib": 8796093022208
+    case "PiB": 9007199254740992
+    case "pib": 9007199254740992
+    else: 0
+}
+
+# @desc Converts a memory/storage amount between any two supported unit codes.
+#       Formula: memory_convert(amount, from, to) = amount * bits(from) / bits(to)
+# @param amount: real — Numeric value in the source unit
+# @param from: str — Source unit code (e.g. "GB")
+# @param to: str — Target unit code (e.g. "MiB")
+# @return real — Converted value in the target unit
+memory_convert(amount: real, from: str, to: str) -> real = {
+    f := memory_factor(from)
+    t := memory_factor(to)
+    if (f == 0) { error("unknown source memory unit: " + from) }
+    if (t == 0) { error("unknown target memory unit: " + to) }
+    amount * f / t
+}
+
+# @desc Converts a memory amount and appends the target unit code.
+#       Formula: memory_convert_str(amount, from, to) = fmt("%g %s", convert, to)
+# @param amount: real — Numeric value in the source unit
+# @param from: str — Source unit code
+# @param to: str — Target unit code
+# @return str — Converted value followed by the target code
+memory_convert_str(amount: real, from: str, to: str) -> str = fmt("%g %s", memory_convert(amount, from, to), to)
+
+# @desc Converts every amount in a vector between two memory units in one call.
+# @param amounts: vec — Vector of numeric amounts in the source unit
+# @param from: str — Source unit code
+# @param to: str — Target unit code
+# @return vec — Vector of converted amounts in the target unit
+memory_convert_all(amounts: vec, from: str, to: str) -> vec = [memory_convert(a, from, to) for a in amounts]
+
+# @desc Lists the canonical unit codes supported by this patch (ascending size).
+# @return vec — Unit codes from bit through PiB
+memory_units() -> vec<str> = {
+    u := vec<str>()
+    "bit" into u
+    "byte" into u
+    "KB" into u
+    "MB" into u
+    "GB" into u
+    "TB" into u
+    "PB" into u
+    "KiB" into u
+    "MiB" into u
+    "GiB" into u
+    "TiB" into u
+    "PiB" into u
+    u
+}
+
+# @desc Formats a BYTE count with binary (IEC) units, choosing the largest unit.
+#       Example: memory_human(1610612736) = "1.50 GiB"
+# @param bytes: real — Size in bytes
+# @return str — Human-readable size string
+memory_human(bytes: real) -> str = {
+    b := bytes
+    if (b < 0) { return "-" + memory_human(-b) }
+    if (b < 1024) { return fmt("%g B", b) }
+    if (b < 1048576) { return fmt("%.2f KiB", b / 1024) }
+    if (b < 1073741824) { return fmt("%.2f MiB", b / 1048576) }
+    if (b < 1099511627776) { return fmt("%.2f GiB", b / 1073741824) }
+    if (b < 1125899906842624) { return fmt("%.2f TiB", b / 1099511627776) }
+    fmt("%.2f PiB", b / 1125899906842624)
+}
+
+# ==============================================================================
+# 4. Convenience aliases
+# ==============================================================================
+
+# @desc Alias for memory_convert. Formula: size_convert(amount, from, to)
+# @param amount: real — Numeric value in the source unit
+# @param from: str — Source unit code
+# @param to: str — Target unit code
+# @return real — Converted value in the target unit
+size_convert(amount: real, from: str, to: str) -> real = memory_convert(amount, from, to)
+
+# @desc Converts a BYTE count to kibibytes (KiB). Formula: bytes_to_kib(b) = b / 1024
+# @param b: real — Size in bytes
+# @return real — Size in kibibytes
+bytes_to_kib(b: real) -> real = b / 1024
+
+# @desc Converts a BYTE count to mebibytes (MiB). Formula: bytes_to_mib(b) = b / 1048576
+# @param b: real — Size in bytes
+# @return real — Size in mebibytes
+bytes_to_mib(b: real) -> real = b / 1048576
+
+# @desc Converts a BYTE count to gibibytes (GiB). Formula: bytes_to_gib(b) = b / 1073741824
+# @param b: real — Size in bytes
+# @return real — Size in gibibytes
+bytes_to_gib(b: real) -> real = b / 1073741824
+
+# @desc Converts a BYTE count to tebibytes (TiB). Formula: bytes_to_tib(b) = b / 1099511627776
+# @param b: real — Size in bytes
+# @return real — Size in tebibytes
+bytes_to_tib(b: real) -> real = b / 1099511627776
+
+# @desc Converts kibibytes (KiB) to BYTES. Formula: kib_to_bytes(k) = k * 1024
+# @param k: real — Size in kibibytes
+# @return real — Size in bytes
+kib_to_bytes(k: real) -> real = k * 1024

@@ -73,6 +73,26 @@ android {
       }
     }
   }
+
+  // Store-facing signed releases are UNIVERSAL: the release workflow builds
+  // `libmathengine.so` for every ABI below (see cpp/build_engine_abi.sh) and
+  // passes -PmepAbis=... so the packaged APK advertises exactly the ABIs that
+  // really contain the engine. Without this, the APK shipped the engine only
+  // for arm64-v8a while still installing on armeabi-v7a/x86 devices, where it
+  // crashed on launch.
+  (project.findProperty("mepAbis") as String?)
+    ?.split(',')
+    ?.map { it.trim() }
+    ?.filter { it.isNotEmpty() }
+    ?.takeIf { it.isNotEmpty() }
+    ?.let { abis ->
+      defaultConfig {
+        ndk {
+          abiFilters.clear()
+          abiFilters += abis
+        }
+      }
+    }
 }
 
 dependencies {
