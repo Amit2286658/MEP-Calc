@@ -108,9 +108,11 @@ jobs:
             # Landscape legs exercise layout-land/activity_main.xml. `wm user-rotation
             # lock` is the reliable switch (the settings keys are ignored on some
             # images); direction is per-profile because a tablet's natural
-            # orientation is already landscape.
-            if [ "${{ matrix.rotation }}" = "landscape" ]; then if [ "${{ matrix.profile }}" = "pixel_tablet" ]; then adb shell wm user-rotation lock 0; else adb shell wm user-rotation lock 1; fi; fi
-            adb shell dumpsys window displays 2>/dev/null | grep -E "init=|cur=|app=|stable=" | head -6 || true
+            # orientation is already landscape. Rotation is flaky on these images
+            # (the same command lands in different legs run to run), so re-assert
+            # it and poll the display frame until width > height. One line: the
+            # runner executes each line in its own `sh -c`.
+            if [ "${{ matrix.rotation }}" = "landscape" ]; then if [ "${{ matrix.profile }}" = "pixel_tablet" ]; then LOCK=0; else LOCK=1; fi; adb shell settings put system accelerometer_rotation 0; adb shell settings put system user_rotation $LOCK; for i in 1 2 3 4 5; do adb shell wm user-rotation lock $LOCK; sleep 3; SZ=$(adb shell dumpsys window displays 2>/dev/null | tr -d '\r' | grep -o 'cur=[0-9]*x[0-9]*' | head -1 | cut -d= -f2); if [ -z "$SZ" ]; then ORI=$(adb shell dumpsys input 2>/dev/null | tr -d '\r' | sed -n 's/.*SurfaceOrientation: *\([0-9]\).*/\1/p' | head -1); if [ "$ORI" = "1" ] || [ "$ORI" = "3" ]; then SZ="landscape"; fi; fi; echo "rotation attempt $i: ${SZ:-unknown}"; case "$SZ" in landscape) echo "landscape confirmed"; break ;; *) if [ -n "$SZ" ] && [ "${SZ%x*}" -gt "${SZ#*x}" ]; then echo "landscape confirmed"; break; fi ;; esac; adb shell wm user-rotation lock 0; sleep 2; done; if [ -z "$SZ" ]; then echo "::warning::could not confirm landscape rotation; screenshots may be portrait"; elif [ "$SZ" != "landscape" ] && [ "${SZ%x*}" -le "${SZ#*x}" ]; then echo "::warning::display still portrait ($SZ) after 5 attempts"; fi; adb shell dumpsys window displays 2>/dev/null | tr -d '\r' | grep -oE '(init|cur|app)=[0-9]+x[0-9]+' | head -4 || true; fi
             adb install -r "$(find "$GITHUB_WORKSPACE/apk" -name '*.apk' | head -1)"
             # The app's light/dark switcher is its OWN persisted preference
             # (ecalc_prefs -> dark_mode) and deliberately ignores the system night
