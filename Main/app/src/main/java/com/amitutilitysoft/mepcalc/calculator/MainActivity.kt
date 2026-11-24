@@ -101,20 +101,29 @@ class MainActivity : AppCompatActivity() {
         isDegreeMode = prefs.getBoolean("degree_mode", isDegreeMode)
 
         super.onCreate(savedInstanceState)
+
+        // Draw edge-to-edge on EVERY API level, not just Android 15+.
+        //
+        // targetSdk 36 means Android 15/16 force edge-to-edge, and the layout is
+        // built for exactly that: `displaySection` reserves its own 48dp top
+        // padding to clear the status bar, and the keypad sheet paints behind the
+        // navigation bar while padding its keys by `systemBars().bottom`.
+        //
+        // On API 26-34 the window is NOT edge-to-edge by default, so the system
+        // already insets the content by the status bar height and that 48dp is
+        // then added on top of it — a toolbar-sized empty band above the theme
+        // switcher (72dp of clearance for a 24dp bar). Opting in makes pre-15
+        // devices render exactly like Android 16 does today.
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        // Android 15+ (targetSdk 35+) enforces edge-to-edge: the window draws behind the
-        // system bars, so with 3-button navigation the nav bar overlapped the app UI.
-        // Pre-15 devices keep the decor-fits behavior (bars reserve their own space) —
-        // there the reported systemBars insets are already consumed/zero, so this is a
-        // no-op and nothing changes visually (CI emulator screenshots stay valid).
         // Forward children insets with ONLY the systemBars type zeroed, keeping ime()
         // and displayCutout() intact for the fragment-level keyboard/cutout handling.
         // Pad only the nav-bar edges (bottom + sides): the app intentionally draws
         // behind the status bar (its containers reserve their own 48dp header padding
-        // and color the bar area), so padding the top here double-compensated and left
-        // a large gap below the status bar.
+        // and color the bar area), so padding the top here would double-compensate.
         val baseKeypadBottomPadPx = (10f * resources.displayMetrics.density).toInt()
         ViewCompat.setOnApplyWindowInsetsListener(binding.rootFrame) { v, windowInsets ->
             val bars = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars())
