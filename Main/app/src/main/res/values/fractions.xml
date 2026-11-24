@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Share of the window height the currency picker dialog may use.
+
+  Portrait has ~830dp of height, so 72% leaves the frosted backdrop visible
+  above and below the card. Landscape phones have ~345dp, where 72% shows only
+  three currency rows; values-land opens it up to 88%.
+-->
+<resources>
+    <fraction name="currency_picker_height">72%</fraction>
+</resources>

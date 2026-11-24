@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Column count for the keypad grids (KeyGridFragment reads this).
+
+  Every key set holds exactly 20 keys. Portrait phones keep the familiar
+  4 x 5 numeric block; the landscape shell has the room for a wider grid, so
+  values-land raises this to 5 (5 x 4) once the key order is re-authored for
+  that shape — until then it inherits 4 and the same 4 x 5 block is drawn in
+  the narrower right-hand pane.
+-->
+<resources>
+    <integer name="key_grid_columns">4</integer>
+</resources>

@@ -66,10 +66,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { profile: pixel_4,      api: 34, dark: no  }   # 5.7" phone, 1080x2280 @440dpi
-          - { profile: pixel_6_pro,  api: 34, dark: yes }   # 6.7" big phone, dark mode
-          - { profile: pixel_4,      api: 30, dark: no  }   # 5.7" phone on OLDER Android (API 30)
-          - { profile: pixel_tablet, api: 34, dark: no  }   # 10.95" tablet, 2560x1600 @xhdpi
+          - { profile: pixel_4,      api: 34, dark: no,  rotation: portrait  }   # 5.7" phone, 1080x2280 @440dpi
+          - { profile: pixel_6_pro,  api: 34, dark: yes, rotation: portrait  }   # 6.7" big phone, dark mode
+          - { profile: pixel_4,      api: 30, dark: no,  rotation: portrait  }   # 5.7" phone on OLDER Android (API 30)
+          - { profile: pixel_4,      api: 34, dark: no,  rotation: landscape }   # phone landscape (layout-land shell)
+          - { profile: pixel_6_pro,  api: 34, dark: yes, rotation: landscape }   # phone landscape, dark
+          - { profile: pixel_tablet, api: 34, dark: no,  rotation: landscape }   # 10.95" tablet, 2560x1600 @xhdpi
     steps:
       # Checkout: defaults.run.working-directory is "Main", so bash would fail to
       # start in the screenshots job without the repo tree being present.
@@ -89,7 +91,7 @@ jobs:
             echo "::warning::no /dev/kvm on this runner — emulator will be slow (TCG)"
           fi
 
-      - name: Capture screenshots (${{ matrix.profile }}, API ${{ matrix.api }}${{ matrix.dark == 'yes' && ' — dark' || '' }})
+      - name: Capture screenshots (${{ matrix.profile }}, API ${{ matrix.api }}${{ matrix.dark == 'yes' && ' — dark' || '' }}${{ matrix.rotation == 'landscape' && ' — landscape' || '' }})
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: ${{ matrix.api }}
@@ -103,6 +105,9 @@ jobs:
             # across lines. Keep each logical statement on ONE line and use
             # absolute paths throughout.
             adb shell cmd uimode night ${{ matrix.dark }}
+            # Landscape legs exercise layout-land/activity_main.xml. Lock rotation
+            # before the first launch so the activity is created straight into it.
+            if [ "${{ matrix.rotation }}" = "landscape" ]; then adb shell settings put system accelerometer_rotation 0; adb shell settings put system user_rotation 1; fi
             adb install -r "$(find "$GITHUB_WORKSPACE/apk" -name '*.apk' | head -1)"
             # The app's light/dark switcher is its OWN persisted preference
             # (ecalc_prefs -> dark_mode) and deliberately ignores the system night
@@ -116,15 +121,15 @@ jobs:
             sleep 40
             mkdir -p "$GITHUB_WORKSPACE/shots"
             adb exec-out screencap -p > "$GITHUB_WORKSPACE/shots/01-home.png"
-            W=$(adb shell wm size | sed -n 's/.*: \([0-9]*\)x[0-9]*/\1/p' | tr -d '\r'); H=$(adb shell wm size | sed -n 's/.*: [0-9]*x\([0-9]*\)/\1/p' | tr -d '\r'); X1=$((W*8/10)); X2=$((W*12/100)); Y=$((H*62/100)); for p in 1 2 3 4 5; do adb shell input swipe "$X1" "$Y" "$X2" "$Y" 600; sleep 3; adb exec-out screencap -p > "$GITHUB_WORKSPACE/shots/0$((p+1))-page$((p+1)).png"; done; ls -la "$GITHUB_WORKSPACE/shots"
+            W=$(adb shell wm size | sed -n 's/.*: \([0-9]*\)x[0-9]*/\1/p' | tr -d '\r'); H=$(adb shell wm size | sed -n 's/.*: [0-9]*x\([0-9]*\)/\1/p' | tr -d '\r'); if [ "${{ matrix.rotation }}" = "landscape" ]; then T=$W; W=$H; H=$T; fi; X1=$((W*8/10)); X2=$((W*12/100)); Y=$((H*62/100)); for p in 1 2 3 4 5; do adb shell input swipe "$X1" "$Y" "$X2" "$Y" 600; sleep 3; adb exec-out screencap -p > "$GITHUB_WORKSPACE/shots/0$((p+1))-page$((p+1)).png"; done; ls -la "$GITHUB_WORKSPACE/shots"
             # 7th shot: the .math Studio page, reached with the app's own gesture
             # (swipe left across the display). Walk back to the first keypad page
             # first so the swipe starts on a page that owns the gesture.
-            W=$(adb shell wm size | sed -n 's/.*: \([0-9]*\)x[0-9]*/\1/p' | tr -d '\r'); H=$(adb shell wm size | sed -n 's/.*: [0-9]*x\([0-9]*\)/\1/p' | tr -d '\r'); Y=$((H*62/100)); for p in 1 2 3 4 5; do adb shell input swipe "$((W*12/100))" "$Y" "$((W*80/100))" "$Y" 300; sleep 1; done; adb shell input swipe "$((W*80/100))" "$((H*22/100))" "$((W*15/100))" "$((H*22/100))" 400; sleep 6; adb exec-out screencap -p > "$GITHUB_WORKSPACE/shots/07-studio.png"; ls -la "$GITHUB_WORKSPACE/shots"
+            W=$(adb shell wm size | sed -n 's/.*: \([0-9]*\)x[0-9]*/\1/p' | tr -d '\r'); H=$(adb shell wm size | sed -n 's/.*: [0-9]*x\([0-9]*\)/\1/p' | tr -d '\r'); if [ "${{ matrix.rotation }}" = "landscape" ]; then T=$W; W=$H; H=$T; fi; Y=$((H*62/100)); for p in 1 2 3 4 5; do adb shell input swipe "$((W*12/100))" "$Y" "$((W*80/100))" "$Y" 300; sleep 1; done; if [ "${{ matrix.rotation }}" = "landscape" ]; then adb shell input swipe "$((W*38/100))" "$((H*50/100))" "$((W*6/100))" "$((H*50/100))" 400; else adb shell input swipe "$((W*80/100))" "$((H*22/100))" "$((W*15/100))" "$((H*22/100))" 400; fi; sleep 6; adb exec-out screencap -p > "$GITHUB_WORKSPACE/shots/07-studio.png"; ls -la "$GITHUB_WORKSPACE/shots"
 
       - uses: actions/upload-artifact@v4
         with:
           # API level in the name: two matrix slots share profile pixel_4 (API 34 / API 30)
-          name: screenshots-${{ matrix.profile }}-api${{ matrix.api }}${{ matrix.dark == 'yes' && '-dark' || '' }}
+          name: screenshots-${{ matrix.profile }}-api${{ matrix.api }}${{ matrix.dark == 'yes' && '-dark' || '' }}${{ matrix.rotation == 'landscape' && '-land' || '' }}
           path: shots/*.png
           if-no-files-found: error

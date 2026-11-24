@@ -597,7 +597,11 @@ class CurrencyFragment : Fragment() {
         })
 
         val modalW = minOf(root.width - dp(32f), dp(420f)).coerceAtLeast(dp(240f))
-        val modalH = (root.height * 0.72f).toInt().coerceAtLeast(dp(340f))
+        // Landscape phones are only ~345dp tall; a fixed 72% would show roughly
+        // three rows, so values-land raises the share (see res/values*/fractions).
+        val heightFraction = resources.getFraction(R.fraction.currency_picker_height, 1, 1)
+        val modalH = (root.height * heightFraction).toInt()
+            .coerceIn(dp(280f), (root.height - dp(24f)).coerceAtLeast(dp(280f)))
         overlay.addView(modal, FrameLayout.LayoutParams(modalW, modalH, Gravity.CENTER))
         root.addView(overlay, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         pickerOverlay = overlay

@@ -58,7 +58,10 @@
         </LinearLayout>
     </FrameLayout>
 
-    <!-- Main calculator container -->
+    <!-- Main calculator container
+         Portrait shell. Landscape phones use layout-land/activity_main.xml
+         (identical ids, display left / keypad right); tablets will use
+         layout-sw600dp. Never change an id here without mirroring it. -->
     <LinearLayout
         android:id="@+id/calculatorContainer"
         android:layout_width="match_parent"

@@ -72,9 +72,14 @@ class KeyGridFragment : Fragment() {
         }
         val activity = requireActivity() as MainActivity
 
+        // Column count is a resource (values/integers.xml) so landscape/tablet
+        // shells can reshape the grid without touching the key definitions.
+        val cols = resources.getInteger(R.integer.key_grid_columns).coerceAtLeast(1)
+        val rows = (specs.size + cols - 1) / cols
+
         val root = FrameLayout(requireContext())
         val grid = GridLayout(requireContext()).apply {
-            columnCount = 4; rowCount = 5
+            columnCount = cols; rowCount = rows
             layoutParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
         }
         root.addView(grid)
@@ -95,7 +100,7 @@ class KeyGridFragment : Fragment() {
                 }
             }
             val params = GridLayout.LayoutParams(
-                GridLayout.spec(index / 4, 1f), GridLayout.spec(index % 4, 1f)
+                GridLayout.spec(index / cols, 1f), GridLayout.spec(index % cols, 1f)
             ).apply { width = 0; height = 0; setGravity(Gravity.FILL) }
             grid.addView(keyView, params); keyViews.add(keyView)
         }
@@ -167,6 +172,7 @@ class KeyGridFragment : Fragment() {
         val clampedDist = distance.coerceIn(1, 4)
         val d = clampedDist.toFloat()
         val density = resources.displayMetrics.density
+        val cols = resources.getInteger(R.integer.key_grid_columns).coerceAtLeast(1)
 
         // Force scales proportionally with tab distance (1 = small force, 4 = high force)
         val slidePx = (16f + (d - 1f) * 18f) * density * fromDirection
@@ -176,9 +182,9 @@ class KeyGridFragment : Fragment() {
         val settleDuration = 460L + (clampedDist - 1) * 60L
 
         keyViews.forEachIndexed { idx, kv ->
-            val row = idx / 4
-            val col = idx % 4
-            val leadCol = if (fromDirection >= 0) col else (3 - col)
+            val row = idx / cols
+            val col = idx % cols
+            val leadCol = if (fromDirection >= 0) col else (cols - 1 - col)
             val delay = ((row * 12) + (leadCol * 11)).toLong()
             val rowSign = if (row % 2 == 0) 1f else -1f
 
