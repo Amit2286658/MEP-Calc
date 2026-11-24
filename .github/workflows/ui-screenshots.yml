@@ -110,7 +110,10 @@ jobs:
             # the "dark" matrix leg. Seed the preference before the first launch.
             if [ "${{ matrix.dark }}" = "yes" ]; then adb shell "run-as com.amitutilitysoft.mepcalc sh -c 'mkdir -p shared_prefs; cat > shared_prefs/ecalc_prefs.xml'" < "$GITHUB_WORKSPACE/.github/ci/dark_mode_prefs.xml"; fi
             adb shell am start -W -n com.amitutilitysoft.mepcalc/.LauncherDark
-            sleep 15
+            # 40s: the startup patch sync fires a status toast when it finishes
+            # (usually 5-15s in); capture only after it has had time to appear and
+            # expire, otherwise the toast lands in the store screenshot.
+            sleep 40
             mkdir -p "$GITHUB_WORKSPACE/shots"
             adb exec-out screencap -p > "$GITHUB_WORKSPACE/shots/01-home.png"
             W=$(adb shell wm size | sed -n 's/.*: \([0-9]*\)x[0-9]*/\1/p' | tr -d '\r'); H=$(adb shell wm size | sed -n 's/.*: [0-9]*x\([0-9]*\)/\1/p' | tr -d '\r'); X1=$((W*8/10)); X2=$((W*12/100)); Y=$((H*62/100)); for p in 1 2 3 4 5; do adb shell input swipe "$X1" "$Y" "$X2" "$Y" 600; sleep 3; adb exec-out screencap -p > "$GITHUB_WORKSPACE/shots/0$((p+1))-page$((p+1)).png"; done; ls -la "$GITHUB_WORKSPACE/shots"
