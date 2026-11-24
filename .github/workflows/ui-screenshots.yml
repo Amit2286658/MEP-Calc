@@ -71,7 +71,7 @@ jobs:
           - { profile: pixel_4,      api: 30, dark: no,  rotation: portrait  }   # 5.7" phone on OLDER Android (API 30)
           - { profile: pixel_4,      api: 34, dark: no,  rotation: landscape }   # phone landscape (layout-land shell)
           - { profile: pixel_6_pro,  api: 34, dark: yes, rotation: landscape }   # phone landscape, dark
-          - { profile: pixel_tablet, api: 34, dark: no,  rotation: landscape }   # 10.95" tablet, 2560x1600 @xhdpi
+          - { profile: pixel_tablet, api: 34, dark: no,  rotation: natural   }   # 10.95" tablet, natural landscape 2560x1600
     steps:
       # Checkout: defaults.run.working-directory is "Main", so bash would fail to
       # start in the screenshots job without the repo tree being present.
@@ -105,9 +105,12 @@ jobs:
             # across lines. Keep each logical statement on ONE line and use
             # absolute paths throughout.
             adb shell cmd uimode night ${{ matrix.dark }}
-            # Landscape legs exercise layout-land/activity_main.xml. Lock rotation
-            # before the first launch so the activity is created straight into it.
-            if [ "${{ matrix.rotation }}" = "landscape" ]; then adb shell settings put system accelerometer_rotation 0; adb shell settings put system user_rotation 1; fi
+            # Landscape legs exercise layout-land/activity_main.xml. `wm user-rotation
+            # lock` is the reliable switch (the settings keys are ignored on some
+            # images); direction is per-profile because a tablet's natural
+            # orientation is already landscape.
+            if [ "${{ matrix.rotation }}" = "landscape" ]; then if [ "${{ matrix.profile }}" = "pixel_tablet" ]; then adb shell wm user-rotation lock 0; else adb shell wm user-rotation lock 1; fi; fi
+            adb shell dumpsys window displays 2>/dev/null | grep -E "init=|cur=|app=|stable=" | head -6 || true
             adb install -r "$(find "$GITHUB_WORKSPACE/apk" -name '*.apk' | head -1)"
             # The app's light/dark switcher is its OWN persisted preference
             # (ecalc_prefs -> dark_mode) and deliberately ignores the system night
