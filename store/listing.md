@@ -83,9 +83,13 @@ MEP Calc is open source. The engine is available at
 https://github.com/Amit2286658/Math-Engine-MEP
 ```
 
-## Version notes (build 1.0.15)
+## Version notes (build 1.0.16)
 
 ```
+• Header spacing fix: the theme switcher, MR and info row now sit the same
+  distance below the status bar on every Android version. Android 7–14 builds
+  previously reserved the status-bar height twice, leaving a toolbar-sized empty
+  band above the header (Android 15/16 already looked right).
 • First release under the com.amitutilitysoft.mepcalc application ID, so the app
   is unmistakably MEP Calc by Amit UtilitySoft.
 • Universal native maths engine for 64-bit ARM, 32-bit ARM and x86_64.
@@ -108,6 +112,6 @@ https://github.com/Amit2286658/Math-Engine-MEP
    spares; every shot is a real capture, no mockups).
 3. Paste the short and full description above.
 4. Paste the privacy policy URL.
-5. Upload `ecalc-release-v15.apk` (signed, universal, from the
-   `ecalc-release-apk-v15` CI artifact) — **not** any `*-debug-*` or
+5. Upload `ecalc-release-v16.apk` (signed, universal, from the
+   `ecalc-release-apk-v16` CI artifact) — **not** any `*-debug-*` or
    `*CI-ONLY*` artifact.
