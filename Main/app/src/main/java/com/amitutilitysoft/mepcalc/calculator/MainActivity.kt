@@ -22,6 +22,7 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewAnimationUtils
 import android.view.ViewTreeObserver
+import android.view.WindowManager
 import android.view.animation.AccelerateDecelerateInterpolator
 import android.view.animation.AccelerateInterpolator
 import android.view.animation.DecelerateInterpolator
@@ -121,6 +122,19 @@ class MainActivity : AppCompatActivity() {
         // devices render exactly like Android 16 does today.
         WindowCompat.setDecorFitsSystemWindows(window, false)
 
+        // Draw across the display cutout on the short edges. Without this, the
+        // default cutout mode letterboxes the window as soon as the display
+        // rotates: a punch-hole phone (Pixel 6 Pro and most modern phones) shows
+        // a ~41dp dead band down the whole cutout side in landscape. The content
+        // is not pushed under the camera — the inset listener below pads
+        // `rootFrame` by `displayCutout()` on those edges.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            window.attributes = window.attributes.apply {
+                layoutInDisplayCutoutMode =
+                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+            }
+        }
+
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
@@ -132,9 +146,18 @@ class MainActivity : AppCompatActivity() {
         val baseKeypadBottomPadPx = (10f * resources.displayMetrics.density).toInt()
         ViewCompat.setOnApplyWindowInsetsListener(binding.rootFrame) { v, windowInsets ->
             val bars = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars())
+            // Cutout mode is SHORT_EDGES above, so in landscape the punch-hole
+            // sits inside our window and has to be padded out by hand — take the
+            // larger of the nav-bar and cutout inset per side.
+            val cutout = windowInsets.getInsets(WindowInsetsCompat.Type.displayCutout())
             // Pad only horizontal cutouts/bars on rootFrame so full-screen overlays
             // and circular reveals reach the bottom edge seamlessly.
-            v.setPadding(bars.left, 0, bars.right, 0)
+            v.setPadding(
+                maxOf(bars.left, cutout.left),
+                0,
+                maxOf(bars.right, cutout.right),
+                0
+            )
 
             // Extend keypadSheet's background (#333333 dark / #F3F3F3 light) behind the nav bar
             // while keeping the keys padded above 3-button and gesture navigation bars.
