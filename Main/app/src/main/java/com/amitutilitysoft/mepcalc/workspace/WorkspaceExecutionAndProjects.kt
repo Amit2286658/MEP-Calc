@@ -2040,8 +2040,7 @@ internal fun MathWorkspaceFragment.switchToProject(targetProjectRaw: String, clo
     updateModuleSubTabVisibility(animate = false)
     refreshFileManagerDrawer()
 
-    val pStat = MathEngineManager.getProjectBinaryStatus(ctx, targetProject)
-    tvModuleQuickStatus?.text = "📦 Switched to project '$targetProject' (recycled shared engine • stdlib+patches ${pStat.stdlibMathcBytes / 1024} KB)."
+    tvModuleQuickStatus?.text = "📦 Switched to project '$targetProject'."
     activity.showButtonToast("Project: $targetProject")
     if (closeDrawerAfter && isFileManagerDrawerOpen) {
         toggleFileManagerDrawer(open = false, animate = true)
@@ -2060,8 +2059,8 @@ internal fun MathWorkspaceFragment.promptNewProjectDialog() {
     showFrostedFileNamingModal(
         badgeIcon = "📦",
         title = "New .math Project",
-        subtitle = "Recyclable Project Workspace • Shared Engine (O(1) Module Flush)",
-        description = "Creates a new project folder in math_projects/. Switching or running projects flushes previous user modules on the single shared engine in O(1) time.",
+        subtitle = "A separate folder for your own modules and data files",
+        description = "Creates a new project folder with a starter module. Each project keeps its own functions, constants and data, and switching projects reloads your modules instantly without restarting the app.",
         initialText = "",
         hintText = defaultProjName,
         suggestions = listOf(
@@ -2079,7 +2078,7 @@ internal fun MathWorkspaceFragment.promptNewProjectDialog() {
                 val starterName = "main.math"
                 val starterModId = "${projName}_main".replace(Regex("[^a-zA-Z0-9_]"), "_")
                 File(projDir, starterName).writeText(
-                    "# Project [$projName] — Isolated engine.so & stdlib.mathc (with global patches)\n" +
+                    "# Project [$projName] — your own module folder; global functions and patches are available\n" +
                     "[$starterModId]\n" +
                     "<[arith]\n" +
                     "<[trig]\n\n" +
@@ -2153,9 +2152,9 @@ internal fun MathWorkspaceFragment.resetSpecificProjectEngine(projectName: Strin
             moduleVarsCache.clear()
             refreshFileManagerDrawer()
             loadModuleStateIntoEditor(animate = false)
-            tvModuleQuickStatus?.text = "↺ Flushed user modules on shared engine back to clean stdlib + patches baseline."
+            tvModuleQuickStatus?.text = "↺ Reloaded the built-in functions and patches for this project."
             activity.showButtonToast(
-                if (ok) "Flushed user modules for $projectName"
+                if (ok) "Reloaded $projectName"
                 else "Reset $projectName"
             )
         }

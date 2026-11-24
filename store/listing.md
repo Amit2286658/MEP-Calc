@@ -9,9 +9,9 @@ running on a Pixel 4 (light), Pixel 6 Pro (dark) and a 10" tablet.
 | File | Where it goes |
 |---|---|
 | `icon-512.png` | App icon (512 × 512 PNG). Regenerate with `python3 store/render_icon.py`. |
-| `screenshots/phone-light-0*.png` | Phone screenshots, light theme (1080 × 2280). |
-| `screenshots/phone-dark-0*.png` | Phone screenshots, dark theme (1440 × 3120). |
-| `screenshots/tablet-0*.png` | Tablet screenshots (2560 × 1600). |
+| `screenshots/phone-light-0*.png` | Phone screenshots, light theme (1080 × 2280), 7 shots including the .math Studio. |
+| `screenshots/phone-dark-0*.png` | Phone screenshots, dark theme (1440 × 3120), 7 shots. |
+| `screenshots/tablet-0*.png` | Tablet screenshots, portrait (1600 × 2560), 7 shots. |
 | `../PRIVACY.md` | Privacy policy URL: <https://github.com/Amit2286658/MEP-Calc/blob/main/PRIVACY.md> |
 
 ## Listing fields
@@ -84,16 +84,19 @@ MEP Calc is open source. The engine is available at
 https://github.com/Amit2286658/Math-Engine-MEP
 ```
 
-## Version notes (build 1.0.14)
+## Version notes (build 1.0.15)
 
 ```
-• New application ID (com.amitutilitysoft.mepcalc) so the app is clearly
-  identified as MEP Calc by Amit UtilitySoft.
-• Universal native math engine for 64-bit ARM, 32-bit ARM and x86_64.
+• First release under the com.amitutilitysoft.mepcalc application ID, so the app
+  is unmistakably MEP Calc by Amit UtilitySoft.
+• Universal native maths engine for 64-bit ARM, 32-bit ARM and x86_64.
 • The function library (prime and number theory, number-to-words, memory and
   storage conversion) ships inside the app and loads on first launch offline.
 • Patch updates published on GitHub are picked up automatically on the next
   launch; the bundled copy is only a fallback.
+• Math Studio now greets first-time visitors with a one-line tip: four demo
+  modules are preloaded, press ▶ Run to execute the open one, ☰ opens files.
+• Clearer wording in the Studio project dialogs (no engine internals).
 • New: computer memory / storage size converter (bit, byte, KB–PB, KiB–PiB).
 • Privacy policy link added to the in-app info window.
 ```
@@ -101,9 +104,9 @@ https://github.com/Amit2286658/Math-Engine-MEP
 ## Pre-upload checklist
 
 1. Upload `icon-512.png` — not a screenshot crop and not an upscaled mipmap.
-2. Upload at least 4 phone screenshots and 2 tablet screenshots.
+2. Upload the phone screenshots (light or dark, all 7) plus the 7 tablet ones.
 3. Paste the short and full description above.
 4. Paste the privacy policy URL.
-5. Upload `ecalc-release-v14.apk` (signed, universal, from the
-   `ecalc-release-apk-v14` CI artifact) — **not** any `*-debug-*` or
+5. Upload `ecalc-release-v15.apk` (signed, universal, from the
+   `ecalc-release-apk-v15` CI artifact) — **not** any `*-debug-*` or
    `*CI-ONLY*` artifact.

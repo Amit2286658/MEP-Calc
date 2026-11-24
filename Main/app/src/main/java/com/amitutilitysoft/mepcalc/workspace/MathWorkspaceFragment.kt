@@ -58,6 +58,11 @@ internal class ProjectFolderState(
  */
 class MathWorkspaceFragment : Fragment() {
 
+    private companion object {
+        /** Set after the one-time Studio orientation toast has been shown. */
+        const val PREF_STUDIO_INTRO_SHOWN = "studio_intro_shown"
+    }
+
     internal var workspaceRootFrame: FrameLayout? = null
     internal var rootLayout: LinearLayout? = null
     internal var topHeaderBar: LinearLayout? = null
@@ -319,13 +324,12 @@ class MathWorkspaceFragment : Fragment() {
                         activeModuleFileName,
                         etModuleEditor?.text?.toString()
                     )
-                    val epDesc = if (ep != null) "${ep.fileName} :: ${ep.entryFn}()" else "None (individual files run top-to-bottom)"
+                    val epDesc = if (ep != null) "runs ${ep.fileName} → ${ep.entryFn}()" else "individual files run top-to-bottom"
                     activity.showButtonPopup(
                         this,
-                        "Active Project: [$activeProjectName]\n" +
-                            "Entry Point: $epDesc\n" +
-                            "• engine.so: ${if (status.hasEngineSo) "${status.engineSoBytes / 1024} KB" else "provisioned"}\n" +
-                            "• stdlib.mathc: ${status.stdlibMathcBytes / 1024} KB (${status.linkedModulesCount} module(s) linked)\n" +
+                        "Project: [$activeProjectName]\n" +
+                            "Entry point: $epDesc\n" +
+                            "• ${status.linkedModulesCount} module(s) linked and ready\n" +
                             "Tap to open ☰ Project Options & File Manager."
                     )
                 } else activity.dismissButtonPopup()
@@ -437,6 +441,28 @@ class MathWorkspaceFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+        maybeShowStudioIntro()
+    }
+
+    /**
+     * One-time plain-language orientation the first time the Studio is opened.
+     *
+     * The preloaded demo modules make the screen self-explanatory *after* you know
+     * they are runnable, but a first-time visitor (including a store reviewer) has
+     * no way to know that: the editor just looks like a code box. Shown once per
+     * install, from the persisted preference flag, and never over a running task.
+     */
+    private fun maybeShowStudioIntro() {
+        val act = activity as? MainActivity ?: return
+        if (act.prefs.getBoolean(PREF_STUDIO_INTRO_SHOWN, false)) return
+        act.prefs.edit().putBoolean(PREF_STUDIO_INTRO_SHOWN, true).apply()
+        view?.postDelayed({
+            if (isAdded && !act.isFinishing && !act.isDestroyed) {
+                act.showIntroToast(
+                    "Four demo modules are preloaded. Tap ▶ Run to execute the open one; ☰ opens your files and projects."
+                )
+            }
+        }, 650L)
     }
 
     override fun onResume() {

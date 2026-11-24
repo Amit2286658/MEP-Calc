@@ -267,6 +267,13 @@ class MainActivity : AppCompatActivity() {
         currentToast = Toast.makeText(this, label, Toast.LENGTH_SHORT).also { it.show() }
     }
 
+    /** One-off orientation hint (first visit to a non-obvious screen). Longer than a
+     *  button toast so there is time to read it; still cancelled by later toasts. */
+    fun showIntroToast(label: String) {
+        currentToast?.cancel()
+        currentToast = Toast.makeText(this, label, Toast.LENGTH_LONG).also { it.show() }
+    }
+
     /** Dedicated long-duration toast for background patch loader status so keypad or
      *  studio button toasts do not immediately cancel patch diagnostic messages. */
     fun showPatchStatusToast(summary: String) {
