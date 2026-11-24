@@ -384,8 +384,14 @@ internal fun MainActivity.spawnRippleRing(cx: Int, cy: Int, maxRadius: Float, de
 }
 
 internal fun MainActivity.toggleThemeWithCircularReveal() {
+    // A tap that lands while the previous reveal is still playing (or while its
+    // ripple rings are fading) is ignored rather than queued. Two reveals in
+    // flight capture the container into two bitmaps and remove them out of
+    // order, which produced a visible flash of the old palette.
+    if (themeRevealInFlight) return
     val root = binding.rootFrame; val w = root.width; val h = root.height
     if (w == 0 || h == 0) { isDarkMode = !isDarkMode; persistTheme(); applyThemeColors(isDarkMode); applyThemeIconScales(isDarkMode, false); return }
+    themeRevealInFlight = true
     val activeContainer: View = if (currentWorkspacePage == 1) binding.mathWorkspaceContainer else binding.calculatorContainer
     val bitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
     Canvas(bitmap).let { activeContainer.draw(it) }
@@ -396,11 +402,24 @@ internal fun MainActivity.toggleThemeWithCircularReveal() {
     val iconLoc = IntArray(2); revealIcon.getLocationInWindow(iconLoc)
     val cx = iconLoc[0] + revealIcon.width/2; val cy = iconLoc[1] + revealIcon.height/2
     val maxRadius = hypot(w.toDouble(), h.toDouble()).toFloat()
-    ViewAnimationUtils.createCircularReveal(activeContainer, cx, cy, 0f, maxRadius).apply {
-        duration = 380L; interpolator = AccelerateDecelerateInterpolator()
-        addListener(object : AnimatorListenerAdapter() {
-            override fun onAnimationEnd(animation: Animator) { root.removeView(overlay); bitmap.recycle() }
-        }); start()
+    // Release the lock only after the longest trailing flourish is done: the
+    // second ripple ring starts at 240ms and runs 760ms past that.
+    val unlockDelayMs = 620L
+    runCatching {
+        ViewAnimationUtils.createCircularReveal(activeContainer, cx, cy, 0f, maxRadius).apply {
+            duration = 380L; interpolator = AccelerateDecelerateInterpolator()
+            addListener(object : AnimatorListenerAdapter() {
+                override fun onAnimationEnd(animation: Animator) {
+                    root.removeView(overlay); bitmap.recycle()
+                    root.postDelayed({ themeRevealInFlight = false }, unlockDelayMs)
+                }
+            }); start()
+        }
+    }.onFailure {
+        // Never leave the switch permanently locked if the platform refuses the
+        // reveal (e.g. the container is not attached yet).
+        root.removeView(overlay); bitmap.recycle()
+        themeRevealInFlight = false
     }
     spawnRippleRing(cx, cy, maxRadius, 60L, 0.35f, 760L)
     spawnRippleRing(cx, cy, maxRadius, 240L, 0.35f, 760L)

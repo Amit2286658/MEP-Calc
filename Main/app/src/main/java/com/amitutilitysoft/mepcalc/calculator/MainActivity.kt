@@ -81,6 +81,11 @@ class MainActivity : AppCompatActivity() {
     internal val workspaceSlideAnimators = mutableListOf<ValueAnimator>()
     internal var workspaceFragment: MathWorkspaceFragment? = null
 
+    /** True while a light/dark circular reveal is playing. Taps received during
+     *  the reveal are dropped instead of queued: overlapping reveals draw stale
+     *  palette snapshots over each other and the last one wins arbitrarily. */
+    internal var themeRevealInFlight: Boolean = false
+
     /** Distance-dependent tab physics tracking (1 = adjacent tab, 4 = farthest tab). */
     internal var lastTabDistance: Int = 1
     internal var lastTabDirection: Int = 1

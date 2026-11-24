@@ -83,9 +83,14 @@ MEP Calc is open source. The engine is available at
 https://github.com/Amit2286658/Math-Engine-MEP
 ```
 
-## Version notes (build 1.0.16)
+## Version notes (build 1.0.17)
 
 ```
+• Currency picker: tapping From or To now expands the list with a spring
+  animation and the rows cascade in; choosing a currency shrinks it back the
+  same way instead of snapping shut.
+• The light/dark switch now finishes its reveal before accepting another tap,
+  so rapid taps no longer queue overlapping animations.
 • Header spacing fix: the theme switcher, MR and info row now sit the same
   distance below the status bar on every Android version. Android 7–14 builds
   previously reserved the status-bar height twice, leaving a toolbar-sized empty
@@ -112,6 +117,6 @@ https://github.com/Amit2286658/Math-Engine-MEP
    spares; every shot is a real capture, no mockups).
 3. Paste the short and full description above.
 4. Paste the privacy policy URL.
-5. Upload `ecalc-release-v16.apk` (signed, universal, from the
-   `ecalc-release-apk-v16` CI artifact) — **not** any `*-debug-*` or
+5. Upload `ecalc-release-v17.apk` (signed, universal, from the
+   `ecalc-release-apk-v17` CI artifact) — **not** any `*-debug-*` or
    `*CI-ONLY*` artifact.

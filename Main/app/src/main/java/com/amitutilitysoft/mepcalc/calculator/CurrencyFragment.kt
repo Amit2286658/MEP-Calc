@@ -15,6 +15,8 @@ import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.view.animation.AccelerateInterpolator
+import android.view.animation.DecelerateInterpolator
 import android.view.animation.LinearInterpolator
 import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
@@ -59,6 +61,11 @@ class CurrencyFragment : Fragment() {
 
     private val quickKeys = mutableListOf<NeumorphicKeyView>()
     private var pickerOverlay: FrameLayout? = null
+    private var pickerModal: View? = null
+    private var pickerList: RecyclerView? = null
+    private var pickerAnimator: ValueAnimator? = null
+    /** True between [dismissPicker] and the end of the shrink animation. */
+    private var pickerClosing = false
     private val wobbleAnimators = mutableListOf<ValueAnimator>()
 
     override fun onCreateView(
@@ -410,7 +417,9 @@ class CurrencyFragment : Fragment() {
     }
 
     private fun openCurrencyPicker(isFrom: Boolean) {
-        dismissPicker()
+        // Drop any previous overlay instantly: re-opening while a close is still
+        // shrinking must not leave two stacked overlays behind.
+        removePickerImmediately()
         val act = activity as? MainActivity ?: return
         val root = act.binding.rootFrame
         val dark = act.isDarkMode
@@ -553,6 +562,14 @@ class CurrencyFragment : Fragment() {
                 tvS.text = item.symbol ?: ""
                 tvS.setTextColor(accentColor)
 
+                // Rows are animated in/out; a recycled row must start from a clean
+                // slate or it can appear already faded.
+                row.animate().cancel()
+                row.alpha = 1f
+                row.translationX = 0f
+                row.scaleX = 1f
+                row.scaleY = 1f
+
                 row.setOnClickListener {
                     if (isFrom) fromCode = item.code else toCode = item.code
                     savePairPrefs(act)
@@ -584,6 +601,67 @@ class CurrencyFragment : Fragment() {
         overlay.addView(modal, FrameLayout.LayoutParams(modalW, modalH, Gravity.CENTER))
         root.addView(overlay, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         pickerOverlay = overlay
+        pickerModal = modal
+        pickerList = rv
+        pickerClosing = false
+
+        // Entrance. The backdrop fades while the card itself springs up from
+        // 84% scale on the app's damped-spring curve, then the rows cascade in
+        // below it — so opening the picker reads as an expansion rather than a
+        // frame swap.
+        overlay.alpha = 0f
+        overlay.animate().alpha(1f).setDuration(180L)
+            .setInterpolator(DecelerateInterpolator()).start()
+        modal.scaleX = 0.84f
+        modal.scaleY = 0.84f
+        modal.alpha = 0f
+        modal.translationY = dp(14f).toFloat()
+        pickerAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = 460L
+            interpolator = LinearInterpolator()
+            addUpdateListener { anim ->
+                val f = anim.animatedValue as Float
+                val step = springStep(f)
+                val scale = 0.84f + 0.16f * step
+                modal.scaleX = scale
+                modal.scaleY = scale
+                // Reach full opacity early; the visible motion after that is the
+                // spring overshoot, not a fading card.
+                modal.alpha = (f * 3f).coerceAtMost(1f)
+                modal.translationY = dp(14f) * (1f - step)
+            }
+            addListener(object : AnimatorListenerAdapter() {
+                override fun onAnimationEnd(animation: Animator) {
+                    if (animation === pickerAnimator) pickerAnimator = null
+                    // A close cancels this mid-flight; leave the card where the
+                    // shrink animation expects to find it instead of snapping.
+                    if (pickerClosing) return
+                    modal.scaleX = 1f
+                    modal.scaleY = 1f
+                    modal.alpha = 1f
+                    modal.translationY = 0f
+                }
+            })
+            start()
+        }
+
+        rv.post {
+            if (!isAdded || pickerOverlay !== overlay) return@post
+            val visible = minOf(rv.childCount, 14)
+            for (i in 0 until visible) {
+                val row = rv.getChildAt(i) ?: continue
+                row.alpha = 0f
+                row.translationX = dp(18f).toFloat()
+                row.scaleX = 0.97f
+                row.scaleY = 0.97f
+                row.animate()
+                    .alpha(1f).translationX(0f).scaleX(1f).scaleY(1f)
+                    .setStartDelay(120L + i * 24L)
+                    .setDuration(300L)
+                    .setInterpolator(DecelerateInterpolator())
+                    .start()
+            }
+        }
     }
 
     fun handleBackPressed(): Boolean {
@@ -594,13 +672,94 @@ class CurrencyFragment : Fragment() {
         return false
     }
 
+    /**
+     * Underdamped spring step, 0 -> 1 with ~34% overshoot: the same curve the
+     * keypad/tab physics use (e^-7.5t · sin 22t), rewritten as a settle shape
+     * so it can drive scale directly.
+     */
+    private fun springStep(f: Float): Float {
+        val t = f.toDouble() * 0.48
+        val decay = Math.exp(-7.5 * t)
+        return (1.0 - decay * (Math.cos(22.0 * t) + (7.5 / 22.0) * Math.sin(22.0 * t))).toFloat()
+    }
+
+    private fun hidePickerKeyboard(overlay: View) {
+        (overlay.context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager)
+            ?.hideSoftInputFromWindow(overlay.windowToken, 0)
+    }
+
+    /**
+     * Closes the picker with the reverse spring: rows peel away, the card
+     * shrinks back and the backdrop fades. Repeat taps while the shrink is
+     * running are ignored (the close is not queued), and the overlay is removed
+     * from the hierarchy only when the animation ends.
+     */
     private fun dismissPicker() {
+        val overlay = pickerOverlay ?: return
+        if (pickerClosing) return
+        hidePickerKeyboard(overlay)
+        val modal = pickerModal
+        if (modal == null || !overlay.isAttachedToWindow || view == null) {
+            removePickerImmediately()
+            return
+        }
+        pickerClosing = true
+        pickerAnimator?.cancel()
+        val density = resources.displayMetrics.density
+        pickerList?.let { list ->
+            for (i in 0 until minOf(list.childCount, 14)) {
+                val row = list.getChildAt(i) ?: continue
+                row.animate()
+                    .alpha(0f)
+                    .translationX(16f * density)
+                    .setStartDelay((i * 9L).coerceAtMost(110L))
+                    .setDuration(150L)
+                    .setInterpolator(AccelerateInterpolator())
+                    .start()
+            }
+        }
+        pickerAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = 260L
+            interpolator = LinearInterpolator()
+            addUpdateListener { anim ->
+                val f = anim.animatedValue as Float
+                val step = springStep(f)
+                val scale = 1f - 0.14f * step
+                modal.scaleX = scale
+                modal.scaleY = scale
+                modal.translationY = 6f * density * step
+                overlay.alpha = 1f - f * f
+            }
+            addListener(object : AnimatorListenerAdapter() {
+                override fun onAnimationEnd(animation: Animator) {
+                    if (animation === pickerAnimator) pickerAnimator = null
+                    removePickerImmediately()
+                }
+            })
+            start()
+        }
+    }
+
+    /** Drops the picker without animating. Safe to call at any time, repeatedly. */
+    private fun removePickerImmediately() {
+        pickerAnimator?.cancel()
+        pickerAnimator = null
         pickerOverlay?.let { overlay ->
-            (overlay.context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager)
-                ?.hideSoftInputFromWindow(overlay.windowToken, 0)
+            hidePickerKeyboard(overlay)
+            overlay.animate().cancel()
             (overlay.parent as? FrameLayout)?.removeView(overlay)
         }
+        pickerModal?.let { modal ->
+            modal.animate().cancel()
+            modal.scaleX = 1f
+            modal.scaleY = 1f
+            modal.alpha = 1f
+            modal.translationY = 0f
+        }
+        pickerList = null
+        pickerModal = null
         pickerOverlay = null
+        pickerClosing = false
     }
 
     fun springSettle(fromDirection: Int, distance: Int = 1) {
@@ -690,7 +849,10 @@ class CurrencyFragment : Fragment() {
     }
 
     override fun onDestroyView() {
-        dismissPicker()
+        // No animation here: the fragment view is going away, and a close that is
+        // already mid-shrink would otherwise leave the overlay attached to the
+        // activity's root frame.
+        removePickerImmediately()
         wobbleAnimators.forEach { it.cancel() }
         wobbleAnimators.clear()
         super.onDestroyView()
