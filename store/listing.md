@@ -2,7 +2,7 @@
 
 Upload-ready assets and copy for the Developers Console. Everything here is
 generated from the current build; screenshots are real captures of the app
-running on a Pixel 4 (light), Pixel 6 Pro (dark) and a 10" tablet.
+running on a Pixel 4 (light) and a Pixel 6 Pro (dark).
 
 ## Files
 
@@ -10,8 +10,7 @@ running on a Pixel 4 (light), Pixel 6 Pro (dark) and a 10" tablet.
 |---|---|
 | `icon-512.png` | App icon (512 × 512 PNG). Regenerate with `python3 store/render_icon.py`. |
 | `screenshots/phone-light-0*.png` | Phone screenshots, light theme (1080 × 2280), 7 shots including the .math Studio. |
-| `screenshots/phone-dark-0*.png` | Phone screenshots, dark theme (1440 × 3120), 7 shots. |
-| `screenshots/tablet-0*.png` | Tablet screenshots, portrait (1600 × 2560), 7 shots. |
+| `screenshots/phone-dark-0*.png` | Phone screenshots, dark theme (1440 × 3120), same 7 shots. |
 | `../PRIVACY.md` | Privacy policy URL: <https://github.com/Amit2286658/MEP-Calc/blob/main/PRIVACY.md> |
 
 ## Listing fields
@@ -104,7 +103,9 @@ https://github.com/Amit2286658/Math-Engine-MEP
 ## Pre-upload checklist
 
 1. Upload `icon-512.png` — not a screenshot crop and not an upscaled mipmap.
-2. Upload the phone screenshots (light or dark, all 7) plus the 7 tablet ones.
+2. Upload 8 screenshots in this order: `phone-light-01`, `-02`, `-03`, `-05`,
+   `-06`, `-07-studio`, `phone-dark-01`, `phone-dark-07-studio` (the rest are
+   spares; every shot is a real capture, no mockups).
 3. Paste the short and full description above.
 4. Paste the privacy policy URL.
 5. Upload `ecalc-release-v15.apk` (signed, universal, from the

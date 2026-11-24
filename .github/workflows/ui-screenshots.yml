@@ -103,11 +103,6 @@ jobs:
             # across lines. Keep each logical statement on ONE line and use
             # absolute paths throughout.
             adb shell cmd uimode night ${{ matrix.dark }}
-            # Tablet: capture in PORTRAIT. In landscape the emulator keeps the
-            # Launcher taskbar (app icons + nav buttons) over the bottom of the
-            # app, which has no place in a store screenshot; in portrait the
-            # taskbar is transient.
-            if [ "${{ matrix.profile }}" = "pixel_tablet" ]; then adb shell settings put system accelerometer_rotation 0; adb shell settings put system user_rotation 1; fi
             adb install -r "$(find "$GITHUB_WORKSPACE/apk" -name '*.apk' | head -1)"
             # The app's light/dark switcher is its OWN persisted preference
             # (ecalc_prefs -> dark_mode) and deliberately ignores the system night
