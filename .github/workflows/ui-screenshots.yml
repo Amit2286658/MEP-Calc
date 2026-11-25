@@ -71,8 +71,8 @@ jobs:
           - { profile: pixel_4,      api: 30, dark: no,  rotation: portrait  }   # 5.7" phone on OLDER Android (API 30)
           - { profile: pixel_4,      api: 34, dark: no,  rotation: landscape }   # phone landscape (layout-land shell)
           - { profile: pixel_6_pro,  api: 34, dark: yes, rotation: landscape }   # phone landscape, dark
-          - { profile: pixel_tablet, api: 34, dark: no,  rotation: natural   }   # 10.95" tablet, portrait (layout-sw600dp)
-          - { profile: pixel_tablet, api: 34, dark: no,  rotation: landscape }   # 10.95" tablet, transposed (same shell)
+          - { profile: pixel_tablet, api: 34, dark: no,  rotation: landscape }   # 10.95" tablet landscape (layout-sw600dp)
+          - { profile: pixel_tablet, api: 34, dark: no,  rotation: portrait  }   # 10.95" tablet portrait (same shell)
     steps:
       # Checkout: defaults.run.working-directory is "Main", so bash would fail to
       # start in the screenshots job without the repo tree being present.
@@ -108,11 +108,11 @@ jobs:
             adb shell cmd uimode night ${{ matrix.dark }}
             # Landscape legs exercise layout-land/activity_main.xml. `wm user-rotation
             # lock` is the reliable switch (the settings keys are ignored on some
-            # images); direction is per-profile because a tablet's natural
-            # orientation is already landscape. Rotation is flaky on these images
+            # images). Rotation is flaky on these images
             # (the same command lands in different legs run to run), so re-assert
             # it and poll the display frame until width > height. One line: the
             # runner executes each line in its own `sh -c`.
+            if [ "${{ matrix.rotation }}" = "portrait" ]; then PS=$(adb shell wm size | tr -d '\r' | sed -n 's/Physical size: \([0-9]*\)x\([0-9]*\).*/\1x\2/p' | head -1); PW=${PS%x*}; PH=${PS#*x*}; if [ "$PW" -gt "$PH" ]; then adb shell wm size "${PH}x${PW}"; echo "forced portrait logical size ${PH}x${PW}"; fi; fi
             if [ "${{ matrix.rotation }}" = "landscape" ]; then LOCK=1; adb shell settings put system accelerometer_rotation 0; adb shell settings put system user_rotation $LOCK; ok=0; for i in 1 2 3; do adb shell wm user-rotation lock $LOCK; sleep 3; SZ=$(adb shell dumpsys window displays 2>/dev/null | tr -d '\r' | grep -o 'cur=[0-9]*x[0-9]*' | head -1 | cut -d= -f2); echo "rotation attempt $i: ${SZ:-unknown}"; if [ -n "$SZ" ] && [ "${SZ%x*}" -gt "${SZ#*x}" ]; then ok=1; break; fi; adb shell wm user-rotation lock 0; sleep 2; done; if [ "$ok" = "1" ]; then echo "landscape via display rotation"; else PS=$(adb shell wm size | tr -d '\r' | sed -n 's/Physical size: \([0-9]*\)x\([0-9]*\).*/\1x\2/p' | head -1); PW=${PS%x*}; PH=${PS#*x*}; if [ "$PW" -gt "$PH" ]; then LS="$PWx$PH"; else LS="$PHx$PW"; fi; adb shell wm size "$LS"; echo "rotation did not stick; forced landscape logical size $LS"; fi; adb shell dumpsys window displays 2>/dev/null | tr -d '\r' | grep -oE '(init|cur|app)=[0-9]+x[0-9]+' | head -4 || true; fi
             adb install -r "$(find "$GITHUB_WORKSPACE/apk" -name '*.apk' | head -1)"
             # The app's light/dark switcher is its OWN persisted preference
@@ -127,15 +127,15 @@ jobs:
             sleep 40
             mkdir -p "$GITHUB_WORKSPACE/shots"
             adb exec-out screencap -p > "$GITHUB_WORKSPACE/shots/01-home.png"
-            # A landscape leg that silently captured portrait would still upload
-            # under a "-land" name. Check the PNG header and drop a marker file
-            # into the artifact so the mix-up is visible on download.
-            if [ "${{ matrix.rotation }}" = "landscape" ]; then IMG=$(python3 -c "import struct;d=open('$GITHUB_WORKSPACE/shots/01-home.png','rb').read(24);print(*(struct.unpack('>II',d[16:24])))"); set -- $IMG; echo "first capture: ${1}x${2}"; if [ "$1" -le "$2" ]; then echo "::warning::landscape leg captured a portrait frame (${1}x${2})"; echo "expected landscape, got ${1}x${2}" > "$GITHUB_WORKSPACE/shots/ROTATION-FAILED.txt"; fi; fi
-            W=$(adb shell wm size | sed -n 's/Physical size: \([0-9]*\)x[0-9]*/\1/p' | head -1 | tr -d '\r'); H=$(adb shell wm size | sed -n 's/Physical size: [0-9]*x\([0-9]*\)/\1/p' | head -1 | tr -d '\r'); if [ "${{ matrix.rotation }}" = "landscape" ]; then T=$W; W=$H; H=$T; fi; X1=$((W*8/10)); X2=$((W*12/100)); Y=$((H*62/100)); for p in 1 2 3 4 5; do adb shell input swipe "$X1" "$Y" "$X2" "$Y" 600; sleep 3; adb exec-out screencap -p > "$GITHUB_WORKSPACE/shots/0$((p+1))-page$((p+1)).png"; done; ls -la "$GITHUB_WORKSPACE/shots"
+            # A leg that silently captured the wrong orientation would still
+            # upload under a name that says otherwise. Check the PNG header and
+            # drop a marker file into the artifact so the mix-up is visible.
+            IMG=$(python3 -c "import struct;d=open('$GITHUB_WORKSPACE/shots/01-home.png','rb').read(24);print(*(struct.unpack('>II',d[16:24])))"); set -- $IMG; echo "first capture: ${1}x${2}"; if { [ "${{ matrix.rotation }}" = "landscape" ] && [ "$1" -le "$2" ]; } || { [ "${{ matrix.rotation }}" = "portrait" ] && [ "$1" -ge "$2" ]; }; then echo "::warning::${{ matrix.rotation }} leg captured ${1}x${2}"; echo "expected ${{ matrix.rotation }}, got ${1}x${2}" > "$GITHUB_WORKSPACE/shots/ORIENTATION-FAILED.txt"; fi
+            SZ=$(adb shell wm size | tr -d '\r' | sed -n 's/.*size: \([0-9]*x[0-9]*\).*/\1/p' | tail -1); W=${SZ%x*}; H=${SZ#*x*}; if [ "${{ matrix.rotation }}" = "landscape" ] && [ "$W" -lt "$H" ]; then T=$W; W=$H; H=$T; elif [ "${{ matrix.rotation }}" = "portrait" ] && [ "$W" -gt "$H" ]; then T=$W; W=$H; H=$T; fi; X1=$((W*8/10)); X2=$((W*12/100)); Y=$((H*62/100)); for p in 1 2 3 4 5; do adb shell input swipe "$X1" "$Y" "$X2" "$Y" 600; sleep 3; adb exec-out screencap -p > "$GITHUB_WORKSPACE/shots/0$((p+1))-page$((p+1)).png"; done; ls -la "$GITHUB_WORKSPACE/shots"
             # 7th shot: the .math Studio page, reached with the app's own gesture
             # (swipe left across the display). Walk back to the first keypad page
             # first so the swipe starts on a page that owns the gesture.
-            W=$(adb shell wm size | sed -n 's/Physical size: \([0-9]*\)x[0-9]*/\1/p' | head -1 | tr -d '\r'); H=$(adb shell wm size | sed -n 's/Physical size: [0-9]*x\([0-9]*\)/\1/p' | head -1 | tr -d '\r'); if [ "${{ matrix.rotation }}" = "landscape" ]; then T=$W; W=$H; H=$T; fi; Y=$((H*62/100)); for p in 1 2 3 4 5; do adb shell input swipe "$((W*12/100))" "$Y" "$((W*80/100))" "$Y" 300; sleep 1; done; if [ "${{ matrix.rotation }}" = "landscape" ]; then adb shell input swipe "$((W*38/100))" "$((H*50/100))" "$((W*6/100))" "$((H*50/100))" 400; else adb shell input swipe "$((W*80/100))" "$((H*22/100))" "$((W*15/100))" "$((H*22/100))" 400; fi; sleep 6; adb exec-out screencap -p > "$GITHUB_WORKSPACE/shots/07-studio.png"; ls -la "$GITHUB_WORKSPACE/shots"
+            SZ=$(adb shell wm size | tr -d '\r' | sed -n 's/.*size: \([0-9]*x[0-9]*\).*/\1/p' | tail -1); W=${SZ%x*}; H=${SZ#*x*}; if [ "${{ matrix.rotation }}" = "landscape" ] && [ "$W" -lt "$H" ]; then T=$W; W=$H; H=$T; elif [ "${{ matrix.rotation }}" = "portrait" ] && [ "$W" -gt "$H" ]; then T=$W; W=$H; H=$T; fi; Y=$((H*62/100)); if [ "${{ matrix.rotation }}" = "landscape" ] || [ "${{ matrix.profile }}" = "pixel_tablet" ]; then RX1=$((W*56/100)); RX2=$((W*92/100)); else RX1=$((W*12/100)); RX2=$((W*80/100)); fi; for p in 1 2 3 4 5; do adb shell input swipe "$RX1" "$Y" "$RX2" "$Y" 300; sleep 1; done; if [ "${{ matrix.rotation }}" = "landscape" ] || [ "${{ matrix.profile }}" = "pixel_tablet" ]; then adb shell input swipe "$((W*38/100))" "$((H*50/100))" "$((W*6/100))" "$((H*50/100))" 400; else adb shell input swipe "$((W*80/100))" "$((H*22/100))" "$((W*15/100))" "$((H*22/100))" 400; fi; sleep 6; adb exec-out screencap -p > "$GITHUB_WORKSPACE/shots/07-studio.png"; ls -la "$GITHUB_WORKSPACE/shots"
 
       - uses: actions/upload-artifact@v4
         with:
