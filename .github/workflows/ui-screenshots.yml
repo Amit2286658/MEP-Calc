@@ -113,7 +113,7 @@ jobs:
             # it and poll the display frame until width > height. One line: the
             # runner executes each line in its own `sh -c`.
             if [ "${{ matrix.rotation }}" = "portrait" ]; then PS=$(adb shell wm size | tr -d '\r' | sed -n 's/Physical size: \([0-9]*\)x\([0-9]*\).*/\1x\2/p' | head -1); PW=${PS%x*}; PH=${PS#*x*}; if [ "$PW" -gt "$PH" ]; then adb shell wm size "${PH}x${PW}"; echo "forced portrait logical size ${PH}x${PW}"; fi; fi
-            if [ "${{ matrix.rotation }}" = "landscape" ]; then LOCK=1; adb shell settings put system accelerometer_rotation 0; adb shell settings put system user_rotation $LOCK; ok=0; for i in 1 2 3; do adb shell wm user-rotation lock $LOCK; sleep 3; SZ=$(adb shell dumpsys window displays 2>/dev/null | tr -d '\r' | grep -o 'cur=[0-9]*x[0-9]*' | head -1 | cut -d= -f2); echo "rotation attempt $i: ${SZ:-unknown}"; if [ -n "$SZ" ] && [ "${SZ%x*}" -gt "${SZ#*x}" ]; then ok=1; break; fi; adb shell wm user-rotation lock 0; sleep 2; done; if [ "$ok" = "1" ]; then echo "landscape via display rotation"; else PS=$(adb shell wm size | tr -d '\r' | sed -n 's/Physical size: \([0-9]*\)x\([0-9]*\).*/\1x\2/p' | head -1); PW=${PS%x*}; PH=${PS#*x*}; if [ "$PW" -gt "$PH" ]; then LS="$PWx$PH"; else LS="$PHx$PW"; fi; adb shell wm size "$LS"; echo "rotation did not stick; forced landscape logical size $LS"; fi; adb shell dumpsys window displays 2>/dev/null | tr -d '\r' | grep -oE '(init|cur|app)=[0-9]+x[0-9]+' | head -4 || true; fi
+            if [ "${{ matrix.rotation }}" = "landscape" ]; then LOCK=1; adb shell settings put system accelerometer_rotation 0; adb shell settings put system user_rotation $LOCK; ok=0; for i in 1 2 3; do adb shell wm user-rotation lock $LOCK; sleep 3; SZ=$(adb shell dumpsys window displays 2>/dev/null | tr -d '\r' | grep -o 'cur=[0-9]*x[0-9]*' | head -1 | cut -d= -f2); echo "rotation attempt $i: ${SZ:-unknown}"; if [ -n "$SZ" ] && [ "${SZ%x*}" -gt "${SZ#*x}" ]; then ok=1; break; fi; adb shell wm user-rotation lock 0; sleep 2; done; if [ "$ok" = "1" ]; then echo "landscape via display rotation"; else PS=$(adb shell wm size | tr -d '\r' | sed -n 's/Physical size: \([0-9]*\)x\([0-9]*\).*/\1x\2/p' | head -1); PW=${PS%x*}; PH=${PS#*x*}; if [ "$PW" -gt "$PH" ]; then LS="${PW}x${PH}"; else LS="${PH}x${PW}"; fi; adb shell wm size "$LS"; echo "rotation did not stick; forced landscape logical size $LS"; fi; adb shell dumpsys window displays 2>/dev/null | tr -d '\r' | grep -oE '(init|cur|app)=[0-9]+x[0-9]+' | head -4 || true; fi
             adb install -r "$(find "$GITHUB_WORKSPACE/apk" -name '*.apk' | head -1)"
             # The app's light/dark switcher is its OWN persisted preference
             # (ecalc_prefs -> dark_mode) and deliberately ignores the system night
@@ -141,5 +141,7 @@ jobs:
         with:
           # API level in the name: two matrix slots share profile pixel_4 (API 34 / API 30)
           name: screenshots-${{ matrix.profile }}-api${{ matrix.api }}${{ matrix.dark == 'yes' && '-dark' || '' }}${{ matrix.rotation == 'landscape' && '-land' || '' }}
-          path: shots/*.png
+          # shots/ (not shots/*.png): ORIENTATION-FAILED.txt must travel
+          # with the images when a leg captures the wrong orientation.
+          path: shots/
           if-no-files-found: error
