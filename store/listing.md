@@ -85,19 +85,17 @@ MEP Calc is open source. The engine is available at
 https://github.com/Amit2286658/Math-Engine-MEP
 ```
 
-## Version notes (build 1.0.18)
+## Version notes (build 1.0.19)
 
 ```
-• Landscape layout for phones: the display and the keypad now sit side by side,
-  so turning the phone no longer squashes the keys into thin strips. Every page
-  follows the same arrangement — history, the four keypad pages, the currency
-  converter, the function library and Math Studio.
-• The currency list opens taller in landscape, so it still shows a useful number
-  of rows on a short screen.
-• Phones with a punch-hole camera no longer show a black strip down one side in
-  landscape.
-• The Clear / MR / memory row keeps clear of the navigation bar in landscape.
-• Portrait is unchanged.
+• Tablets now have a layout of their own, in portrait and in landscape: the
+  display and the keypad sit side by side instead of the keypad stretching
+  across the whole screen.
+• Tablet keys keep calculator proportions — capped at 132 x 104 dp and
+  centred — so portrait no longer shows a grid of long, thin keys under a
+  mostly empty display. The currency converter pad is capped to match.
+• The tablet layout keeps clear of the Android 13+ taskbar at the bottom.
+• Phones are unchanged: portrait and landscape work exactly as in 1.0.18.
 ```
 
 ## Pre-upload checklist
@@ -110,6 +108,6 @@ https://github.com/Amit2286658/Math-Engine-MEP
    portrait set to show the new landscape layout.
 3. Paste the short and full description above.
 4. Paste the privacy policy URL.
-5. Upload `ecalc-release-v18.apk` (signed, universal, from the
-   `ecalc-release-apk-v18` CI artifact) — **not** any `*-debug-*` or
+5. Upload `ecalc-release-v19.apk` (signed, universal, from the
+   `ecalc-release-apk-v19` CI artifact) — **not** any `*-debug-*` or
    `*CI-ONLY*` artifact.
