@@ -210,13 +210,48 @@ class CurrencyFragment : Fragment() {
 
         // 4. Full-height 4x4 Currency Keypad filling all remaining vertical real estate.
         //    Every key writes plainly into the main expression; `=` converts it.
-        val keyGrid = LinearLayout(ctx).apply {
+        //
+        //    Tablet shells cap the pad and centre it (values-sw600dp sets the same
+        //    132 x 104dp cap the main keypad uses) so portrait does not stretch the
+        //    four rows into 180dp-tall pancakes. Phones keep 0 = fill.
+        val maxKeyWidthDp = resources.getInteger(R.integer.key_max_width_dp)
+        val maxKeyHeightDp = resources.getInteger(R.integer.key_max_height_dp)
+        val capWidthPx = (maxKeyWidthDp * 4 * density).toInt()
+        val capHeightPx = (maxKeyHeightDp * 4 * density).toInt()
+        val capped = capWidthPx > 0 && capHeightPx > 0
+        val keyGrid = object : LinearLayout(ctx) {
+            override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+                if (!capped) { super.onMeasure(widthMeasureSpec, heightMeasureSpec); return }
+                val width = if (MeasureSpec.getMode(widthMeasureSpec) == MeasureSpec.UNSPECIFIED) {
+                    capWidthPx
+                } else {
+                    minOf(MeasureSpec.getSize(widthMeasureSpec), capWidthPx)
+                }
+                val height = if (MeasureSpec.getMode(heightMeasureSpec) == MeasureSpec.UNSPECIFIED) {
+                    capHeightPx
+                } else {
+                    minOf(MeasureSpec.getSize(heightMeasureSpec), capHeightPx)
+                }
+                super.onMeasure(
+                    MeasureSpec.makeMeasureSpec(width, MeasureSpec.EXACTLY),
+                    MeasureSpec.makeMeasureSpec(height, MeasureSpec.EXACTLY)
+                )
+            }
+        }.apply {
             orientation = LinearLayout.VERTICAL
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                0,
-                1f
-            )
+            layoutParams = if (capped) {
+                FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.WRAP_CONTENT,
+                    FrameLayout.LayoutParams.WRAP_CONTENT,
+                    Gravity.CENTER
+                )
+            } else {
+                LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    0,
+                    1f
+                )
+            }
         }
         quickKeys.clear()
         val rows = listOf(
@@ -278,7 +313,19 @@ class CurrencyFragment : Fragment() {
             }
             keyGrid.addView(rowLl)
         }
-        content.addView(keyGrid)
+        if (capped) {
+            // Host fills the remaining height; the wrap-content grid centres in it.
+            content.addView(FrameLayout(ctx).apply {
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    0,
+                    1f
+                )
+                addView(keyGrid)
+            })
+        } else {
+            content.addView(keyGrid)
+        }
 
         root.addView(content)
 
