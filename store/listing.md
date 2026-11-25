@@ -2,7 +2,8 @@
 
 Upload-ready assets and copy for the Developers Console. Everything here is
 generated from the current build; screenshots are real captures of the app
-running on a Pixel 4 (light) and a Pixel 6 Pro (dark).
+running on a Pixel 4 (light) and a Pixel 6 Pro (dark), in portrait and
+landscape.
 
 ## Files
 
@@ -11,6 +12,7 @@ running on a Pixel 4 (light) and a Pixel 6 Pro (dark).
 | `icon-512.png` | App icon (512 × 512 PNG). Regenerate with `python3 store/render_icon.py`. |
 | `screenshots/phone-light-0*.png` | Phone screenshots, light theme (1080 × 2280), 7 shots including the .math Studio. |
 | `screenshots/phone-dark-0*.png` | Phone screenshots, dark theme (1440 × 3120), same 7 shots. |
+| `screenshots/phone-*-landscape-*.png` | Landscape phone captures (2280 × 1080 light, 3120 × 1440 dark) showing the 1.0.18 two-pane layout. |
 | `../PRIVACY.md` | Privacy policy URL: <https://github.com/Amit2286658/MEP-Calc/blob/main/PRIVACY.md> |
 
 ## Listing fields
@@ -83,30 +85,19 @@ MEP Calc is open source. The engine is available at
 https://github.com/Amit2286658/Math-Engine-MEP
 ```
 
-## Version notes (build 1.0.17)
+## Version notes (build 1.0.18)
 
 ```
-• Currency picker: tapping From or To now expands the list with a spring
-  animation and the rows cascade in; choosing a currency shrinks it back the
-  same way instead of snapping shut.
-• The light/dark switch now finishes its reveal before accepting another tap,
-  so rapid taps no longer queue overlapping animations.
-• Header spacing fix: the theme switcher, MR and info row now sit the same
-  distance below the status bar on every Android version. Android 7–14 builds
-  previously reserved the status-bar height twice, leaving a toolbar-sized empty
-  band above the header (Android 15/16 already looked right).
-• First release under the com.amitutilitysoft.mepcalc application ID, so the app
-  is unmistakably MEP Calc by Amit UtilitySoft.
-• Universal native maths engine for 64-bit ARM, 32-bit ARM and x86_64.
-• The function library (prime and number theory, number-to-words, memory and
-  storage conversion) ships inside the app and loads on first launch offline.
-• Patch updates published on GitHub are picked up automatically on the next
-  launch; the bundled copy is only a fallback.
-• Math Studio now greets first-time visitors with a one-line tip: four demo
-  modules are preloaded, press ▶ Run to execute the open one, ☰ opens files.
-• Clearer wording in the Studio project dialogs (no engine internals).
-• New: computer memory / storage size converter (bit, byte, KB–PB, KiB–PiB).
-• Privacy policy link added to the in-app info window.
+• Landscape layout for phones: the display and the keypad now sit side by side,
+  so turning the phone no longer squashes the keys into thin strips. Every page
+  follows the same arrangement — history, the four keypad pages, the currency
+  converter, the function library and Math Studio.
+• The currency list opens taller in landscape, so it still shows a useful number
+  of rows on a short screen.
+• Phones with a punch-hole camera no longer show a black strip down one side in
+  landscape.
+• The Clear / MR / memory row keeps clear of the navigation bar in landscape.
+• Portrait is unchanged.
 ```
 
 ## Pre-upload checklist
@@ -115,8 +106,10 @@ https://github.com/Amit2286658/Math-Engine-MEP
 2. Upload 8 screenshots in this order: `phone-light-01`, `-02`, `-03`, `-05`,
    `-06`, `-07-studio`, `phone-dark-01`, `phone-dark-07-studio` (the rest are
    spares; every shot is a real capture, no mockups).
+   Then add `phone-light-landscape-01` and `phone-dark-landscape-05` after the
+   portrait set to show the new landscape layout.
 3. Paste the short and full description above.
 4. Paste the privacy policy URL.
-5. Upload `ecalc-release-v17.apk` (signed, universal, from the
-   `ecalc-release-apk-v17` CI artifact) — **not** any `*-debug-*` or
+5. Upload `ecalc-release-v18.apk` (signed, universal, from the
+   `ecalc-release-apk-v18` CI artifact) — **not** any `*-debug-*` or
    `*CI-ONLY*` artifact.
