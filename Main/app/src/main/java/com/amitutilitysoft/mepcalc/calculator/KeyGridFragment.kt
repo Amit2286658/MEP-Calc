@@ -78,38 +78,61 @@ class KeyGridFragment : Fragment() {
         val rows = (specs.size + cols - 1) / cols
 
         val root = FrameLayout(requireContext())
-        val grid = GridLayout(requireContext()).apply {
-            columnCount = cols; rowCount = rows
-            layoutParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
-        }
-        root.addView(grid)
 
         // Tablet shells cap the key size and centre the pad (values-sw600dp sets
         // 132 x 104dp; phones leave both at 0 and fill the pane). Without this a
         // 4 x 5 grid stretched over a 1280dp-tall pane gives 190 x 120dp keys.
+        //
+        // The cap is applied in onMeasure, from the measure spec the parent
+        // supplies. A layout listener is not reliable here: the grid's first
+        // measured width can differ from the pane it finally sits in, and a
+        // cap of 132dp does not fit a tablet's portrait pane (~412dp for four
+        // columns), so the pad used to overflow and clip its outer columns.
+        // The measure spec always describes the actual pane, and taking the
+        // smaller of pane and cap keeps portrait snug and landscape capped.
         val maxKeyWidthDp = resources.getInteger(R.integer.key_max_width_dp)
         val maxKeyHeightDp = resources.getInteger(R.integer.key_max_height_dp)
-        if (maxKeyWidthDp > 0 && maxKeyHeightDp > 0) {
-            val density = resources.displayMetrics.density
-            val capWidthPx = (maxKeyWidthDp * cols * density).toInt()
-            val capHeightPx = (maxKeyHeightDp * rows * density).toInt()
-            root.addOnLayoutChangeListener { _, left, top, right, bottom, _, _, _, _ ->
-                val availWidth = right - left
-                val availHeight = bottom - top
-                if (availWidth <= 0 || availHeight <= 0) return@addOnLayoutChangeListener
-                val width = minOf(availWidth, capWidthPx)
-                val height = minOf(availHeight, capHeightPx)
-                val params = grid.layoutParams as FrameLayout.LayoutParams
-                // Only when it actually changes: this listener runs on every
-                // layout pass and reassigning params would loop.
-                if (params.width != width || params.height != height) {
-                    params.width = width
-                    params.height = height
-                    params.gravity = Gravity.CENTER
-                    grid.layoutParams = params
+        val density = resources.displayMetrics.density
+        val capWidthPx = (maxKeyWidthDp * cols * density).toInt()
+        val capHeightPx = (maxKeyHeightDp * rows * density).toInt()
+        val capped = capWidthPx > 0 && capHeightPx > 0
+
+        val grid = object : GridLayout(requireContext()) {
+            override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+                if (!capped) { super.onMeasure(widthMeasureSpec, heightMeasureSpec); return }
+                val width = if (MeasureSpec.getMode(widthMeasureSpec) == MeasureSpec.UNSPECIFIED) {
+                    capWidthPx
+                } else {
+                    minOf(MeasureSpec.getSize(widthMeasureSpec), capWidthPx)
                 }
+                val height = if (MeasureSpec.getMode(heightMeasureSpec) == MeasureSpec.UNSPECIFIED) {
+                    capHeightPx
+                } else {
+                    minOf(MeasureSpec.getSize(heightMeasureSpec), capHeightPx)
+                }
+                super.onMeasure(
+                    MeasureSpec.makeMeasureSpec(width, MeasureSpec.EXACTLY),
+                    MeasureSpec.makeMeasureSpec(height, MeasureSpec.EXACTLY)
+                )
+            }
+        }.apply {
+            columnCount = cols; rowCount = rows
+            layoutParams = if (capped) {
+                // Wrap, so the centred grid keeps the smaller capped size instead
+                // of being stretched back to the pane by MATCH_PARENT.
+                FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.WRAP_CONTENT,
+                    FrameLayout.LayoutParams.WRAP_CONTENT,
+                    Gravity.CENTER
+                )
+            } else {
+                FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                    FrameLayout.LayoutParams.MATCH_PARENT
+                )
             }
         }
+        root.addView(grid)
 
         keyViews.clear()
         specs.forEachIndexed { index, spec ->
