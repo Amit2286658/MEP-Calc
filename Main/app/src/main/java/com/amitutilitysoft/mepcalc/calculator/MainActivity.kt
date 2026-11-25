@@ -5,6 +5,7 @@ import android.animation.AnimatorListenerAdapter
 import android.animation.ValueAnimator
 import android.content.Intent
 import android.content.res.ColorStateList
+import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
@@ -144,6 +145,15 @@ class MainActivity : AppCompatActivity() {
         // behind the status bar (its containers reserve their own 48dp header padding
         // and color the bar area), so padding the top here would double-compensate.
         val baseKeypadBottomPadPx = (10f * resources.displayMetrics.density).toInt()
+        // In the two-pane landscape shell the display pane runs the full height, so
+        // it also reaches the navigation bar — unlike portrait, where the keypad
+        // sheet (which pads its own content) sits below it. A bottom nav bar is
+        // common on landscape tablets and on any device with config_navBarCanMove
+        // false, and it used to cover the Clear/MR/0.0 row. Capture the XML value
+        // once: the listener can fire repeatedly and must not accumulate insets.
+        val landscapeLayout =
+            resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+        val baseDisplayBottomPadPx = binding.displaySection.paddingBottom
         ViewCompat.setOnApplyWindowInsetsListener(binding.rootFrame) { v, windowInsets ->
             val bars = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars())
             // Cutout mode is SHORT_EDGES above, so in landscape the punch-hole
@@ -167,6 +177,17 @@ class MainActivity : AppCompatActivity() {
                 binding.keypadSheet.paddingRight,
                 baseKeypadBottomPadPx + bars.bottom
             )
+
+            // Same clearance for the display pane, but only in the side-by-side
+            // shell; in portrait the pane ends well above the navigation bar.
+            if (landscapeLayout) {
+                binding.displaySection.setPadding(
+                    binding.displaySection.paddingLeft,
+                    binding.displaySection.paddingTop,
+                    binding.displaySection.paddingRight,
+                    baseDisplayBottomPadPx + bars.bottom
+                )
+            }
             windowInsets
         }
 
