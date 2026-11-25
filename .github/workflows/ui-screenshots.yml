@@ -126,6 +126,10 @@ jobs:
             sleep 40
             mkdir -p "$GITHUB_WORKSPACE/shots"
             adb exec-out screencap -p > "$GITHUB_WORKSPACE/shots/01-home.png"
+            # A landscape leg that silently captured portrait would still upload
+            # under a "-land" name. Check the PNG header and drop a marker file
+            # into the artifact so the mix-up is visible on download.
+            if [ "${{ matrix.rotation }}" = "landscape" ]; then IMG=$(python3 -c "import struct;d=open('$GITHUB_WORKSPACE/shots/01-home.png','rb').read(24);print(*(struct.unpack('>II',d[16:24])))"); set -- $IMG; echo "first capture: ${1}x${2}"; if [ "$1" -le "$2" ]; then echo "::warning::landscape leg captured a portrait frame (${1}x${2})"; echo "expected landscape, got ${1}x${2}" > "$GITHUB_WORKSPACE/shots/ROTATION-FAILED.txt"; fi; fi
             W=$(adb shell wm size | sed -n 's/Physical size: \([0-9]*\)x[0-9]*/\1/p' | head -1 | tr -d '\r'); H=$(adb shell wm size | sed -n 's/Physical size: [0-9]*x\([0-9]*\)/\1/p' | head -1 | tr -d '\r'); if [ "${{ matrix.rotation }}" = "landscape" ]; then T=$W; W=$H; H=$T; fi; X1=$((W*8/10)); X2=$((W*12/100)); Y=$((H*62/100)); for p in 1 2 3 4 5; do adb shell input swipe "$X1" "$Y" "$X2" "$Y" 600; sleep 3; adb exec-out screencap -p > "$GITHUB_WORKSPACE/shots/0$((p+1))-page$((p+1)).png"; done; ls -la "$GITHUB_WORKSPACE/shots"
             # 7th shot: the .math Studio page, reached with the app's own gesture
             # (swipe left across the display). Walk back to the first keypad page
