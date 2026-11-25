@@ -2,8 +2,8 @@
 
 Upload-ready assets and copy for the Developers Console. Everything here is
 generated from the current build; screenshots are real captures of the app
-running on a Pixel 4 (light) and a Pixel 6 Pro (dark), in portrait and
-landscape.
+running on a Pixel 4 (light), a Pixel 6 Pro (dark) and a Pixel Tablet
+(light), in portrait and landscape.
 
 ## Files
 
@@ -12,7 +12,8 @@ landscape.
 | `icon-512.png` | App icon (512 × 512 PNG). Regenerate with `python3 store/render_icon.py`. |
 | `screenshots/phone-light-0*.png` | Phone screenshots, light theme (1080 × 2280), 7 shots including the .math Studio. |
 | `screenshots/phone-dark-0*.png` | Phone screenshots, dark theme (1440 × 3120), same 7 shots. |
-| `screenshots/phone-*-landscape-*.png` | Landscape phone captures (2280 × 1080 light, 3120 × 1440 dark) showing the 1.0.18 two-pane layout. |
+| `screenshots/phone-*-landscape-*.png` | Landscape phone captures (2280 × 1080 light, 3120 × 1440 dark) showing the two-pane layout. |
+| `screenshots/tablet-light-*.png` | Tablet captures (1600 × 2560 portrait, 2560 × 1600 landscape) of the 1.0.19 tablet shell. |
 | `../PRIVACY.md` | Privacy policy URL: <https://github.com/Amit2286658/MEP-Calc/blob/main/PRIVACY.md> |
 
 ## Listing fields
@@ -105,7 +106,8 @@ https://github.com/Amit2286658/Math-Engine-MEP
    `-06`, `-07-studio`, `phone-dark-01`, `phone-dark-07-studio` (the rest are
    spares; every shot is a real capture, no mockups).
    Then add `phone-light-landscape-01` and `phone-dark-landscape-05` after the
-   portrait set to show the new landscape layout.
+   portrait set, and `tablet-light-portrait-01` + `tablet-light-landscape-01`
+   last to show the tablet shell in both orientations.
 3. Paste the short and full description above.
 4. Paste the privacy policy URL.
 5. Upload `ecalc-release-v19.apk` (signed, universal, from the
