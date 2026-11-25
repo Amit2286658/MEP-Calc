@@ -1,7 +1,7 @@
 name: ui-screenshots
 
 # Boots the debug APK on several emulator device profiles (phone / big phone /
-# 7" tablet / 10" tablet + a dark-mode variant) and captures one screenshot per
+# 7" tablet / 10" tablet + dark and landscape variants) and captures one per
 # ViewPager2 page, uploaded as downloadable artifacts. Lets you eyeball layout
 # across screen sizes without owning the hardware.
 #
@@ -71,7 +71,8 @@ jobs:
           - { profile: pixel_4,      api: 30, dark: no,  rotation: portrait  }   # 5.7" phone on OLDER Android (API 30)
           - { profile: pixel_4,      api: 34, dark: no,  rotation: landscape }   # phone landscape (layout-land shell)
           - { profile: pixel_6_pro,  api: 34, dark: yes, rotation: landscape }   # phone landscape, dark
-          - { profile: pixel_tablet, api: 34, dark: no,  rotation: natural   }   # 10.95" tablet, natural landscape 2560x1600
+          - { profile: pixel_tablet, api: 34, dark: no,  rotation: natural   }   # 10.95" tablet, portrait (layout-sw600dp)
+          - { profile: pixel_tablet, api: 34, dark: no,  rotation: landscape }   # 10.95" tablet, transposed (same shell)
     steps:
       # Checkout: defaults.run.working-directory is "Main", so bash would fail to
       # start in the screenshots job without the repo tree being present.
@@ -112,7 +113,7 @@ jobs:
             # (the same command lands in different legs run to run), so re-assert
             # it and poll the display frame until width > height. One line: the
             # runner executes each line in its own `sh -c`.
-            if [ "${{ matrix.rotation }}" = "landscape" ]; then if [ "${{ matrix.profile }}" = "pixel_tablet" ]; then LOCK=0; else LOCK=1; fi; adb shell settings put system accelerometer_rotation 0; adb shell settings put system user_rotation $LOCK; ok=0; for i in 1 2 3; do adb shell wm user-rotation lock $LOCK; sleep 3; SZ=$(adb shell dumpsys window displays 2>/dev/null | tr -d '\r' | grep -o 'cur=[0-9]*x[0-9]*' | head -1 | cut -d= -f2); echo "rotation attempt $i: ${SZ:-unknown}"; if [ -n "$SZ" ] && [ "${SZ%x*}" -gt "${SZ#*x}" ]; then ok=1; break; fi; adb shell wm user-rotation lock 0; sleep 2; done; if [ "$ok" = "1" ]; then echo "landscape via display rotation"; else PS=$(adb shell wm size | tr -d '\r' | sed -n 's/Physical size: \([0-9]*\)x\([0-9]*\).*/\1x\2/p' | head -1); adb shell wm size "${PS#*x}x${PS%x*}"; echo "rotation did not stick; forced landscape logical size ${PS#*x}x${PS%x*}"; fi; adb shell dumpsys window displays 2>/dev/null | tr -d '\r' | grep -oE '(init|cur|app)=[0-9]+x[0-9]+' | head -4 || true; fi
+            if [ "${{ matrix.rotation }}" = "landscape" ]; then LOCK=1; adb shell settings put system accelerometer_rotation 0; adb shell settings put system user_rotation $LOCK; ok=0; for i in 1 2 3; do adb shell wm user-rotation lock $LOCK; sleep 3; SZ=$(adb shell dumpsys window displays 2>/dev/null | tr -d '\r' | grep -o 'cur=[0-9]*x[0-9]*' | head -1 | cut -d= -f2); echo "rotation attempt $i: ${SZ:-unknown}"; if [ -n "$SZ" ] && [ "${SZ%x*}" -gt "${SZ#*x}" ]; then ok=1; break; fi; adb shell wm user-rotation lock 0; sleep 2; done; if [ "$ok" = "1" ]; then echo "landscape via display rotation"; else PS=$(adb shell wm size | tr -d '\r' | sed -n 's/Physical size: \([0-9]*\)x\([0-9]*\).*/\1x\2/p' | head -1); PW=${PS%x*}; PH=${PS#*x*}; if [ "$PW" -gt "$PH" ]; then LS="$PWx$PH"; else LS="$PHx$PW"; fi; adb shell wm size "$LS"; echo "rotation did not stick; forced landscape logical size $LS"; fi; adb shell dumpsys window displays 2>/dev/null | tr -d '\r' | grep -oE '(init|cur|app)=[0-9]+x[0-9]+' | head -4 || true; fi
             adb install -r "$(find "$GITHUB_WORKSPACE/apk" -name '*.apk' | head -1)"
             # The app's light/dark switcher is its OWN persisted preference
             # (ecalc_prefs -> dark_mode) and deliberately ignores the system night

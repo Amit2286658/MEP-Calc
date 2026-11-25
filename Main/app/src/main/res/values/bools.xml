@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  True when the active shell puts the display and the keypad side by side
+  (phones in landscape, tablets in both orientations) instead of stacking them.
+
+  Phone portrait is the only single-pane case. Read in MainActivity (display
+  pane bottom inset) and CalculatorThemeAndTooltips (which corners the keypad
+  sheet rounds).
+-->
+<resources>
+    <bool name="two_pane_shell">false</bool>
+</resources>

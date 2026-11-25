@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Tablets: cap the key size and centre the pad.
+
+  Stretching a 4 x 5 grid across a 1280dp-tall pane gives ~190 x 120dp keys
+  (a 1.6:1 "pancake"). 132 x 104dp keeps the familiar calculator proportions on
+  both tablet orientations; 0 (the base value) means "fill the pane", which is
+  what phones want.
+-->
+<resources>
+    <integer name="key_max_width_dp">132</integer>
+    <integer name="key_max_height_dp">104</integer>
+</resources>

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- layout-sw600dp/activity_main.xml: one two-pane shell for both tablet
+         orientations (sw600dp outranks land, so tablets never pick up the
+         phone landscape file). -->
+    <bool name="two_pane_shell">true</bool>
+</resources>

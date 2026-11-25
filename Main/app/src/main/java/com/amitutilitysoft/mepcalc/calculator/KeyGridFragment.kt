@@ -84,6 +84,33 @@ class KeyGridFragment : Fragment() {
         }
         root.addView(grid)
 
+        // Tablet shells cap the key size and centre the pad (values-sw600dp sets
+        // 132 x 104dp; phones leave both at 0 and fill the pane). Without this a
+        // 4 x 5 grid stretched over a 1280dp-tall pane gives 190 x 120dp keys.
+        val maxKeyWidthDp = resources.getInteger(R.integer.key_max_width_dp)
+        val maxKeyHeightDp = resources.getInteger(R.integer.key_max_height_dp)
+        if (maxKeyWidthDp > 0 && maxKeyHeightDp > 0) {
+            val density = resources.displayMetrics.density
+            val capWidthPx = (maxKeyWidthDp * cols * density).toInt()
+            val capHeightPx = (maxKeyHeightDp * rows * density).toInt()
+            root.addOnLayoutChangeListener { _, left, top, right, bottom, _, _, _, _ ->
+                val availWidth = right - left
+                val availHeight = bottom - top
+                if (availWidth <= 0 || availHeight <= 0) return@addOnLayoutChangeListener
+                val width = minOf(availWidth, capWidthPx)
+                val height = minOf(availHeight, capHeightPx)
+                val params = grid.layoutParams as FrameLayout.LayoutParams
+                // Only when it actually changes: this listener runs on every
+                // layout pass and reassigning params would loop.
+                if (params.width != width || params.height != height) {
+                    params.width = width
+                    params.height = height
+                    params.gravity = Gravity.CENTER
+                    grid.layoutParams = params
+                }
+            }
+        }
+
         keyViews.clear()
         specs.forEachIndexed { index, spec ->
             val keyView = NeumorphicKeyView(requireContext()).apply {

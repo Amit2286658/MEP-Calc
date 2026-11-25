@@ -10,4 +10,10 @@
 -->
 <resources>
     <integer name="key_grid_columns">4</integer>
+
+    <!-- 0 = no cap: phones fill the keypad pane edge to edge. values-sw600dp
+         raises these so tablet keys keep calculator proportions instead of
+         stretching into wide pancakes. -->
+    <integer name="key_max_width_dp">0</integer>
+    <integer name="key_max_height_dp">0</integer>
 </resources>

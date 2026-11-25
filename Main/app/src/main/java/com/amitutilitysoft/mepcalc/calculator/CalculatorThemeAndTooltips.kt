@@ -115,12 +115,9 @@ internal fun MainActivity.applyThemeColors(dark: Boolean) {
     binding.tvMrValue.setTextColor(Color.parseColor(secondaryText))
     binding.btnMrClear.isDarkThemeMode = dark
 
-    // The keypad is a bottom sheet in portrait (rounded top corners). In the
-    // landscape shell it is a right-hand pane, so the rounded edge moves to its
-    // left side. Tablets keep the bottom-sheet look until layout-sw600dp lands.
-    val cfg = resources.configuration
-    val sideSheet = cfg.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE &&
-        cfg.smallestScreenWidthDp < 600
+    // Two-pane shells put the keypad on the right, so the rounded edge moves to
+    // its left side (phone portrait keeps the bottom-sheet look).
+    val sideSheet = resources.getBoolean(R.bool.two_pane_shell)
     val topRadius = 28f * resources.displayMetrics.density
     binding.keypadSheet.background = GradientDrawable().apply {
         shape = GradientDrawable.RECTANGLE
