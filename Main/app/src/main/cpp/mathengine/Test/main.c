@@ -1158,14 +1158,25 @@ int main(int argc, char **argv) {
             "# Hotfix override of stdlib function + new helper in existing [physics] module\n"
             "ke(mass, vel) = 0.5 * mass * (vel ^ 2)\n"
             "patch_bonus_energy(e:real, energy) -> real, energy = e + 10 J\n";
-        const char *patch_batch[2] = { ccy_patch, phys_hotfix };
-        if (ccy_patch && eng_apply_patches(proj_eng, patch_batch, 2)) {
+        size_t i_len = 0;
+        char *infl_patch = (char *)frontend_read_file("patches/inflation.math", &i_len);
+        const char *patch_batch[3] = { ccy_patch, infl_patch, phys_hotfix };
+        /* Only the CPI extern is registered here so the unregistered-@currency_convert
+         * degradation check below still exercises the fallback path. */
+        (void)eng_register_extern(proj_eng, "cpi_ratio", host_cpi_ratio_cb, NULL);
+        if (ccy_patch && infl_patch && eng_apply_patches(proj_eng, patch_batch, 3)) {
             Value pv1 = val_void(), pv2 = val_void();
             char sbuf[128] = "";
             /* 1) Unregistered @currency_convert degrades gracefully through with_unit to $str */
             bool p_fallback = eng_eval(proj_eng, "5$ into Rs", &pv1) &&
                               val_as_cstr(&proj_eng->mem, pv1, sbuf, sizeof(sbuf)) &&
                               (strstr(sbuf, "unavailable: host extern") != NULL);
+            /* 1b) inflation.math relative-PPP layer over the CPI extern */
+            Value pv4 = val_void();
+            bool p_inflation = eng_eval(proj_eng, "real_change_pct(\"USD\", \"INR\", 2015, 2025)", &pv4) &&
+                               (fabs(val_get_f64(&proj_eng->mem, pv4) - 40.74074074074074) < 1e-9) &&
+                               eng_eval(proj_eng, "inflation_pct(\"INR\", 2015, 2025)", &pv4) &&
+                               (fabs(val_get_f64(&proj_eng->mem, pv4) - 90.0) < 1e-9);
             /* 2) Verify plain-quote "{25$ into RS}" / "{2km into m}" interpolation and `printl` / `println` */
             const char *ccy_v2 =
                 "[currency]\n"
@@ -1202,11 +1213,12 @@ int main(int argc, char **argv) {
                               !eng_has_entry(proj_eng) &&
                               eng_eval(proj_eng, "convert(2, \"USD\", \"INR\")", &pvc) &&
                               (val_get_f64(&proj_eng->mem, pvc) == 170.0);
-            sec17_patches_ok = p_fallback && p_hotreload && recycle_ok;
+            sec17_patches_ok = p_fallback && p_inflation && p_hotreload && recycle_ok;
         }
+        free(infl_patch);
         free(ccy_patch);
     }
-    printf("    - [OTA Patches] `eng_apply_patches`, `currency.math` & stdlib hotfix : %s\n\n",
+    printf("    - [OTA Patches] `eng_apply_patches`, `currency.math`, `inflation.math` & stdlib hotfix : %s\n\n",
            sec17_patches_ok ? "PASS" : "FAIL");
 
     /* ----------------------------------------------------------------------

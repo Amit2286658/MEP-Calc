@@ -42,6 +42,9 @@ void test_jni_load_stdlib(JNIEnv *jenv, jlong handle);
 bool host_checked_recip_cb(MemArena *mem, const SymTable *tab,
                            const Value *args, uint8_t argc,
                            void *user_ctx, Value *out);
+bool host_cpi_ratio_cb(MemArena *mem, const SymTable *tab,
+                       const Value *args, uint8_t argc,
+                       void *user_ctx, Value *out_val);
 void register_all_host_externs(Engine *eng);
 
 void print_architecture_report(const Engine *eng);

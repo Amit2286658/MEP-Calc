@@ -425,7 +425,53 @@ void *mt_stress_worker(void *arg) {
 }
 #endif
 
+/* -- CPI ratio stub used by the `[inflation]` patch host checks ------------- */
+typedef struct {
+    const char *ccy;
+    int         year;
+    double      index;
+} CpiPoint;
+
+static const CpiPoint g_cpi_points[] = {
+    { "USD", 2015, 100.0 }, { "USD", 2025, 135.0 },
+    { "INR", 2015, 100.0 }, { "INR", 2025, 190.0 },
+    { "EUR", 2015, 100.0 }, { "EUR", 2025, 120.0 },
+    { "GBP", 2015, 100.0 }, { "GBP", 2025, 128.0 },
+};
+
+bool host_cpi_ratio_cb(MemArena *mem, const SymTable *tab,
+                              const Value *args, uint8_t argc,
+                              void *user_ctx, Value *out_val) {
+    (void)tab;
+    (void)user_ctx;
+    if (argc != 3) {
+        mem_err(mem, "@cpi_ratio expects (currency:str, from_year:real, to_year:real)");
+        return false;
+    }
+    char ccy[16];
+    if (!val_as_cstr(mem, args[0], ccy, sizeof(ccy))) {
+        mem_err(mem, "@cpi_ratio currency must be a string");
+        return false;
+    }
+    int y0 = (int)val_get_f64(mem, args[1]);
+    int y1 = (int)val_get_f64(mem, args[2]);
+    double i0 = -1.0, i1 = -1.0;
+    for (size_t i = 0; i < sizeof(g_cpi_points) / sizeof(g_cpi_points[0]); ++i) {
+        if (strcmp(g_cpi_points[i].ccy, ccy) != 0) continue;
+        if (g_cpi_points[i].year == y0) i0 = g_cpi_points[i].index;
+        if (g_cpi_points[i].year == y1) i1 = g_cpi_points[i].index;
+    }
+    if (i0 <= 0.0 || i1 <= 0.0) {
+        /* Sentinel: the host has no CPI data for this currency/year range. */
+        *out_val = val_from_f64(mem, -1.0);
+        return true;
+    }
+    *out_val = val_from_f64(mem, i1 / i0);
+    return true;
+}
+
 void register_all_host_externs(Engine *eng) {
+    eng_register_extern(eng, "cpi_ratio",   host_cpi_ratio_cb,   NULL);
     eng_register_extern(eng, "fx_rate",     host_fx_rate_cb,     (void *)&g_fx_cache);
     eng_register_extern(eng, "fx_set_rate", host_fx_set_rate_cb, (void *)&g_fx_cache);
     eng_register_extern(eng, "fx_history",  host_fx_history_cb,  (void *)&g_fx_cache);
