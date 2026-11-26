@@ -703,3 +703,33 @@ fun MathEngineManager.evaluateCurrencyConversion(
         }
     }
 }
+
+/**
+ * **Real-terms currency change (`[inflation]` patch)**:
+ *
+ * Evaluates the engine patch's `real_change_pct(base, quote, fromYear, toYear)` so the
+ * relative-PPP result shown by the Currency tab is computed inside the C11 Math Engine,
+ * with inflation supplied by the app's `@cpi_ratio` host extern.
+ *
+ * Returns `null` when the patch is not linked yet or the extern has no CPI data for the
+ * requested economies; callers fall back to the equivalent Kotlin calculation.
+ */
+fun MathEngineManager.evaluateRealChangePct(
+    baseCode: String,
+    quoteCode: String,
+    fromYear: Int,
+    toYear: Int,
+    onDone: (Double?) -> Unit
+) {
+    val base = CurrencyConverter.normalizeCurrencyCode(baseCode)
+    val quote = CurrencyConverter.normalizeCurrencyCode(quoteCode)
+    val engineCall = "real_change_pct(\"$base\", \"$quote\", $fromYear, $toYear)"
+    evaluate(engineCall) { outcome ->
+        val value = if (outcome.ok) {
+            outcome.value.trim().split(Regex("\\s+")).firstOrNull()?.toDoubleOrNull()
+        } else {
+            null
+        }
+        onDone(value?.takeIf { !it.isNaN() && !it.isInfinite() })
+    }
+}

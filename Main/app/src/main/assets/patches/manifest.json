@@ -92,6 +92,19 @@
       "size": 46333
     },
     {
+      "file": "inflation.math",
+      "modules": [
+        "inflation"
+      ],
+      "deps": [
+        "arith",
+        "string",
+        "currency"
+      ],
+      "sha256": "dc9b4f74904107bc70c031f0d39707078e8a07c5b384ac04aff4405534033595",
+      "size": 5909
+    },
+    {
       "file": "memory.math",
       "modules": [
         "memory"

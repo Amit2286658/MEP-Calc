@@ -24,6 +24,7 @@ import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
+import android.widget.ScrollView
 import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -40,7 +41,6 @@ class CurrencyFragment : Fragment() {
 
     private var rootContainer: FrameLayout? = null
     private var mainContent: LinearLayout? = null
-    private var tvTitle: TextView? = null
     private var tvRateStatus: TextView? = null
     private var tvCallInfo: TextView? = null
 
@@ -56,10 +56,32 @@ class CurrencyFragment : Fragment() {
     private var tvToCode: TextView? = null
     private var tvToName: TextView? = null
 
+    private var fromYearCard: LinearLayout? = null
+    private var toYearCard: LinearLayout? = null
+    private var tvFromYear: TextView? = null
+    private var tvToYear: TextView? = null
+    private var tvYearArrow: TextView? = null
+
+    private var resultsCard: LinearLayout? = null
+    private var tvRealHeadline: TextView? = null
+    private var tvRealCaption: TextView? = null
+    private var tvInflationDetail: TextView? = null
+    private var tvDataStatus: TextView? = null
+
+    private var btnKeypadToggle: NeumorphicKeyView? = null
+    private var keypadOverlay: FrameLayout? = null
+    private val keypadAnimators = mutableListOf<ValueAnimator>()
+
     private var fromCode: String = "USD"
     private var toCode: String = "INR"
 
-    private val quickKeys = mutableListOf<NeumorphicKeyView>()
+    private var fromYear: Int = 2015
+    private var toYear: Int = 2025
+
+    /** Guards against stale async CPI/engine results after a fast pair or year change. */
+    private var realTermsGeneration = 0
+    private var lastRealTermsKey: String? = null
+
     private var pickerOverlay: FrameLayout? = null
     private var pickerModal: View? = null
     private var pickerList: RecyclerView? = null
@@ -79,6 +101,13 @@ class CurrencyFragment : Fragment() {
         fromCode = prefs.getString("ccy_from", "USD") ?: "USD"
         toCode = prefs.getString("ccy_to", "INR") ?: "INR"
 
+        val thisYear = java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)
+        val defaultTo = (thisYear - 1).coerceAtLeast(1961)
+        val defaultFrom = (defaultTo - 10).coerceAtLeast(1961)
+        fromYear = prefs.getInt("ccy_year_from", defaultFrom).coerceIn(1960, thisYear)
+        toYear = prefs.getInt("ccy_year_to", defaultTo).coerceIn(1960, thisYear)
+        if (toYear < fromYear) toYear = fromYear
+
         val density = resources.displayMetrics.density
         val dp = { v: Float -> (v * density).toInt() }
 
@@ -95,12 +124,12 @@ class CurrencyFragment : Fragment() {
             setPadding(dp(4f), dp(4f), dp(4f), dp(2f))
             layoutParams = FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.MATCH_PARENT
+                FrameLayout.LayoutParams.WRAP_CONTENT
             )
         }
         mainContent = content
 
-        // 1. Header + Live Rate Pill
+        // 1. Header: live rate/provider pill on the LEFT, compact keypad dropdown on the RIGHT.
         val headerRow = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -113,18 +142,15 @@ class CurrencyFragment : Fragment() {
                 bottomMargin = dp(6f)
             }
         }
-        tvTitle = TextView(ctx).apply {
-            text = "Currency"
-            textSize = 14.5f
-            setTypeface(typeface, Typeface.BOLD)
-            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-        }
         tvRateStatus = TextView(ctx).apply {
             textSize = 11.5f
             maxLines = 1
+            ellipsize = android.text.TextUtils.TruncateAt.END
+            gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(10f), dp(4f), dp(10f), dp(4f))
             isClickable = true
             isFocusable = true
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
             setOnClickListener {
                 text = "Refreshing rates…"
                 CurrencyConverter.refreshRatesAsync { _, _ ->
@@ -132,11 +158,32 @@ class CurrencyFragment : Fragment() {
                 }
             }
         }
-        headerRow.addView(tvTitle)
+        btnKeypadToggle = NeumorphicKeyView(ctx).apply {
+            text = "\u2328"
+            textSize = 15f
+            cornerRadiusDp = 10.5f
+            shadowPadDp = 2.2f
+            isAccentKey = false
+            isDarkThemeMode = activity.isDarkMode
+            contentDescription = "Show numeric keypad"
+            layoutParams = LinearLayout.LayoutParams(dp(42f), dp(32f)).apply {
+                marginStart = dp(6f)
+            }
+            setOnClickListener {
+                activity.displaySpringPulse(this, 0.08f)
+                toggleKeypadDropdown(this)
+            }
+            setOnLongClickListener { true }
+            holdListener = { held ->
+                if (held) activity.showButtonPopup(this, "Keypad — drops down the numeric pad for the conversion amount.")
+                else activity.dismissButtonPopup()
+            }
+        }
         headerRow.addView(tvRateStatus)
+        headerRow.addView(btnKeypadToggle)
         content.addView(headerRow)
 
-        // 2. From <-> To Selector Row
+        // 2. From <-> To selector row (unchanged).
         val pairRow = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -156,7 +203,7 @@ class CurrencyFragment : Fragment() {
             tvFromName = card.getChildAt(2) as TextView
         }
         btnSwap = NeumorphicKeyView(ctx).apply {
-            text = "⇄"
+            text = "\u21C4"
             textSize = 18f
             keyRole = KeyRole.OPERATOR
             cornerRadiusDp = 12f
@@ -172,6 +219,7 @@ class CurrencyFragment : Fragment() {
                 savePairPrefs(ctx)
                 updatePairCards()
                 updatePreviewAndRate()
+                scheduleRealTermsRefresh(force = true)
                 activity.displaySpringPulse(this, 0.08f)
             }
             setOnLongClickListener { true }
@@ -191,12 +239,10 @@ class CurrencyFragment : Fragment() {
         pairRow.addView(toCard, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         content.addView(pairRow)
 
-        // 3. Small info strip: which engine call `=` will make with the current From/To.
-        tvCallInfo = TextView(ctx).apply {
-            textSize = 11f
-            typeface = Typeface.create(Typeface.MONOSPACE, Typeface.NORMAL)
-            maxLines = 1
-            setPadding(dp(10f), dp(5f), dp(10f), dp(5f))
+        // 3. Year range selectors: real-terms appreciation/depreciation window.
+        val yearRow = LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
@@ -206,138 +252,117 @@ class CurrencyFragment : Fragment() {
                 bottomMargin = dp(6f)
             }
         }
+        fromYearCard = buildYearSelectorCard(ctx, dp, "FROM YEAR") { openYearPicker(isFrom = true) }.also { card ->
+            tvFromYear = card.getChildAt(1) as TextView
+        }
+        toYearCard = buildYearSelectorCard(ctx, dp, "TO YEAR") { openYearPicker(isFrom = false) }.also { card ->
+            tvToYear = card.getChildAt(1) as TextView
+        }
+        tvYearArrow = TextView(ctx).apply {
+            text = "\u2192"
+            textSize = 15f
+            gravity = Gravity.CENTER
+            layoutParams = LinearLayout.LayoutParams(dp(34f), LinearLayout.LayoutParams.WRAP_CONTENT)
+        }
+        yearRow.addView(fromYearCard, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        yearRow.addView(tvYearArrow)
+        yearRow.addView(toYearCard, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        content.addView(yearRow)
+
+        // 4. Real-terms result card.
+        resultsCard = LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(13f), dp(10f), dp(13f), dp(10f))
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                marginStart = dp(4f)
+                marginEnd = dp(4f)
+                bottomMargin = dp(6f)
+            }
+        }
+        tvRealHeadline = TextView(ctx).apply {
+            text = "—"
+            textSize = 26f
+            setTypeface(typeface, Typeface.BOLD)
+            maxLines = 1
+        }
+        tvRealCaption = TextView(ctx).apply {
+            text = "Real terms vs the selected currency"
+            textSize = 11.5f
+            maxLines = 1
+            ellipsize = android.text.TextUtils.TruncateAt.END
+        }
+        tvInflationDetail = TextView(ctx).apply {
+            text = ""
+            textSize = 11f
+            maxLines = 2
+            setPadding(0, dp(3f), 0, 0)
+        }
+        tvDataStatus = TextView(ctx).apply {
+            text = ""
+            textSize = 10f
+            maxLines = 2
+            setPadding(0, dp(3f), 0, 0)
+        }
+        resultsCard?.addView(tvRealHeadline)
+        resultsCard?.addView(tvRealCaption)
+        resultsCard?.addView(tvInflationDetail)
+        resultsCard?.addView(tvDataStatus)
+        resultsCard?.let { content.addView(it) }
+
+        // 5. Small info strip: the exact engine conversion call the `=` key makes.
+        tvCallInfo = TextView(ctx).apply {
+            textSize = 11f
+            typeface = Typeface.create(Typeface.MONOSPACE, Typeface.NORMAL)
+            maxLines = 1
+            ellipsize = android.text.TextUtils.TruncateAt.END
+            setPadding(dp(10f), dp(5f), dp(10f), dp(5f))
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                marginStart = dp(4f)
+                marginEnd = dp(4f)
+            }
+        }
         content.addView(tvCallInfo)
 
-        // 4. Full-height 4x4 Currency Keypad filling all remaining vertical real estate.
-        //    Every key writes plainly into the main expression; `=` converts it.
-        //
-        //    Tablet shells cap the pad and centre it (values-sw600dp sets the same
-        //    132 x 104dp cap the main keypad uses) so portrait does not stretch the
-        //    four rows into 180dp-tall pancakes. Phones keep 0 = fill.
-        val maxKeyWidthDp = resources.getInteger(R.integer.key_max_width_dp)
-        val maxKeyHeightDp = resources.getInteger(R.integer.key_max_height_dp)
-        val capWidthPx = (maxKeyWidthDp * 4 * density).toInt()
-        val capHeightPx = (maxKeyHeightDp * 4 * density).toInt()
-        val capped = capWidthPx > 0 && capHeightPx > 0
-        val keyGrid = object : LinearLayout(ctx) {
-            override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-                if (!capped) { super.onMeasure(widthMeasureSpec, heightMeasureSpec); return }
-                val width = if (MeasureSpec.getMode(widthMeasureSpec) == MeasureSpec.UNSPECIFIED) {
-                    capWidthPx
-                } else {
-                    minOf(MeasureSpec.getSize(widthMeasureSpec), capWidthPx)
-                }
-                val height = if (MeasureSpec.getMode(heightMeasureSpec) == MeasureSpec.UNSPECIFIED) {
-                    capHeightPx
-                } else {
-                    minOf(MeasureSpec.getSize(heightMeasureSpec), capHeightPx)
-                }
-                super.onMeasure(
-                    MeasureSpec.makeMeasureSpec(width, MeasureSpec.EXACTLY),
-                    MeasureSpec.makeMeasureSpec(height, MeasureSpec.EXACTLY)
-                )
-            }
-        }.apply {
-            orientation = LinearLayout.VERTICAL
-            layoutParams = if (capped) {
-                FrameLayout.LayoutParams(
-                    FrameLayout.LayoutParams.WRAP_CONTENT,
-                    FrameLayout.LayoutParams.WRAP_CONTENT,
-                    Gravity.CENTER
-                )
-            } else {
-                LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT,
-                    0,
-                    1f
-                )
-            }
-        }
-        quickKeys.clear()
-        val rows = listOf(
-            listOf("7", "8", "9", "\u232B"),
-            listOf("4", "5", "6", "()"),
-            listOf("1", "2", "3", ","),
-            listOf("0", ".", "AC", "=")
-        )
-        for (row in rows) {
-            val rowLl = LinearLayout(ctx).apply {
-                orientation = LinearLayout.HORIZONTAL
-                layoutParams = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT,
-                    0,
-                    1f
-                )
-            }
-            for (label in row) {
-                val role = when (label) {
-                    "=" -> KeyRole.PRIMARY_EQUALS
-                    "AC", "\u232B", "()" -> KeyRole.UTILITY
-                    else -> KeyRole.DIGIT
-                }
-                val btn = NeumorphicKeyView(ctx).apply {
-                    text = label
-                    textSize = when (label) {
-                        "AC", "()" -> 14f
-                        else -> 16.5f
-                    }
-                    keyRole = role
-                    cornerRadiusDp = 9f
-                    isDarkThemeMode = activity.isDarkMode
-                    layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f)
-                    setOnClickListener {
-                        val a = activity
-                        when (label) {
-                            "=" -> {
-                                val expr = a.expressionText.trim().ifBlank { "0" }
-                                a.evaluateCurrencyConversion(expr, fromCode, toCode)
-                            }
-                            "()" -> a.onSmartBracketClicked()
-                            else -> a.onKeyClicked(label)
-                        }
-                        updatePreviewAndRate()
-                    }
-                    val tooltip = when (label) {
-                        "=" -> "= — converts the expression in the display from $fromCode to $toCode and records it to History."
-                        "()" -> "( ) — smart bracket: opens or closes parentheses at the cursor."
-                        else -> activity.keyDescriptionFor(label)
-                    }
-                    setOnLongClickListener { true }
-                    holdListener = { held ->
-                        if (held) activity.showButtonPopup(this, tooltip)
-                        else activity.dismissButtonPopup()
-                    }
-                }
-                quickKeys.add(btn)
-                rowLl.addView(btn)
-            }
-            keyGrid.addView(rowLl)
-        }
-        if (capped) {
-            // Host fills the remaining height; the wrap-content grid centres in it.
-            content.addView(FrameLayout(ctx).apply {
-                layoutParams = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT,
-                    0,
-                    1f
-                )
-                addView(keyGrid)
-            })
-        } else {
-            content.addView(keyGrid)
-        }
+        // Absorb the space the old always-on keypad used to fill; the pad now lives
+        // behind the header dropdown.
+        content.addView(View(ctx), LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            0,
+            1f
+        ))
 
-        root.addView(content)
+        // Scroll in compact viewports (phone landscape) so the results card is never clipped.
+        val scroll = ScrollView(ctx).apply {
+            isFillViewport = true
+            overScrollMode = View.OVER_SCROLL_NEVER
+            addView(content)
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+        }
+        root.addView(scroll)
 
         updatePairCards()
+        updateYearCards()
         applyTheme(activity.isDarkMode)
         updatePreviewAndRate()
+        scheduleRealTermsRefresh(force = true)
         return root
     }
 
     override fun onResume() {
         super.onResume()
         updatePreviewAndRate()
+        InflationProvider.refreshIfStaleAsync()
+        // Data may have arrived while another tab was visible.
+        if (lastRealTermsKey != null) scheduleRealTermsRefresh(force = true)
     }
 
     private fun buildCurrencySelectorCard(
@@ -372,6 +397,50 @@ class CurrencyFragment : Fragment() {
                 maxLines = 1
             })
         }
+    }
+
+    private fun buildYearSelectorCard(
+        ctx: Context,
+        dp: (Float) -> Int,
+        labelText: String,
+        onClick: () -> Unit
+    ): LinearLayout {
+        return LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(11f), dp(5f), dp(11f), dp(5f))
+            isClickable = true
+            isFocusable = true
+            setOnClickListener { onClick() }
+
+            addView(TextView(ctx).apply {
+                text = labelText
+                textSize = 9.5f
+                setTypeface(typeface, Typeface.BOLD)
+                letterSpacing = 0.08f
+            })
+            addView(TextView(ctx).apply {
+                text = "—"
+                textSize = 18f
+                setTypeface(typeface, Typeface.BOLD)
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply { topMargin = dp(1f) }
+            })
+        }
+    }
+
+    private fun saveYearPrefs(ctx: Context) {
+        ctx.getSharedPreferences("mep_calc_prefs", Context.MODE_PRIVATE)
+            .edit()
+            .putInt("ccy_year_from", fromYear)
+            .putInt("ccy_year_to", toYear)
+            .apply()
+    }
+
+    private fun updateYearCards() {
+        tvFromYear?.text = fromYear.toString()
+        tvToYear?.text = toYear.toString()
     }
 
     private fun savePairPrefs(ctx: Context) {
@@ -417,6 +486,109 @@ class CurrencyFragment : Fragment() {
         }
     }
 
+    // =========================================================================
+    // Real-terms (inflation / relative PPP) panel
+    // =========================================================================
+
+    /** Recomputes the real-terms card when the currency pair or year window changes. */
+    fun scheduleRealTermsRefresh(force: Boolean = false) {
+        val key = "$fromCode|$toCode|$fromYear|$toYear"
+        if (!force && key == lastRealTermsKey) return
+        lastRealTermsKey = key
+        val gen = ++realTermsGeneration
+
+        if (fromYear >= toYear) {
+            renderRealTerms(0.0, fromYear, fromYear, 0.0, 0.0)
+            return
+        }
+
+        tvRealHeadline?.text = "…"
+        tvRealCaption?.text = "Calculating real change…"
+        tvInflationDetail?.text = ""
+        tvDataStatus?.text = "${InflationProvider.SOURCE_LABEL} • fetching…"
+
+        InflationProvider.ensureDataAsync(listOf(fromCode, toCode), fromYear, toYear) { ok ->
+            view?.post {
+                if (gen != realTermsGeneration || view == null) return@post
+                if (ok) computeRealTerms(gen) else renderInflationUnavailable()
+            }
+        }
+    }
+
+    private fun computeRealTerms(gen: Int) {
+        val range = InflationProvider.resolvedRange(listOf(fromCode, toCode), fromYear, toYear)
+        if (range == null) {
+            renderInflationUnavailable()
+            return
+        }
+        val (ry0, ry1) = range
+        if (ry1 <= ry0) {
+            renderRealTerms(0.0, ry0, ry1, 0.0, 0.0)
+            return
+        }
+        val infFrom = InflationProvider.inflationPercent(fromCode, ry0, ry1)
+        val infTo = InflationProvider.inflationPercent(toCode, ry0, ry1)
+
+        // Headline comes from the engine patch (`real_change_pct`), which calls the
+        // `@cpi_ratio` extern for both economies. Fall back to the identical local
+        // formula only when the patch is not linked yet (e.g. first launch offline).
+        MathEngineManager.evaluateRealChangePct(fromCode, toCode, ry0, ry1) { pct ->
+            view?.post {
+                if (gen != realTermsGeneration || view == null) return@post
+                val value = pct ?: InflationProvider.realChangePercent(fromCode, toCode, ry0, ry1)
+                if (value.isNaN()) renderInflationUnavailable()
+                else renderRealTerms(value, ry0, ry1, infFrom, infTo)
+            }
+        }
+    }
+
+    private fun renderRealTerms(
+        pct: Double,
+        fromY: Int,
+        toY: Int,
+        infFromPct: Double,
+        infToPct: Double
+    ) {
+        val dark = (activity as? MainActivity)?.isDarkMode ?: false
+        val positive = Color.parseColor(if (dark) "#13959B" else "#2E8B57")
+        val negative = Color.parseColor(if (dark) "#EF7B72" else "#C75146")
+
+        tvRealHeadline?.text = String.format(Locale.US, "%+.2f%%", pct)
+        tvRealHeadline?.setTextColor(if (pct < -0.005) negative else positive)
+
+        val verb = when {
+            pct > 0.005 -> "appreciated"
+            pct < -0.005 -> "depreciated"
+            else -> "held steady"
+        }
+        tvRealCaption?.text = "$fromCode $verb vs $toCode in real terms"
+
+        val period = if (fromY == toY) "$fromY" else "$fromY→$toY"
+        tvInflationDetail?.text =
+            "Inflation $period • $fromCode ${fmtPct(infFromPct)} • $toCode ${fmtPct(infToPct)}"
+        tvDataStatus?.text = "${InflationProvider.SOURCE_LABEL} • relative PPP"
+    }
+
+    private fun renderInflationUnavailable() {
+        val dark = (activity as? MainActivity)?.isDarkMode ?: false
+        val secondary = Color.parseColor(if (dark) "#8B95A0" else "#666666")
+        tvRealHeadline?.text = "—"
+        tvRealHeadline?.setTextColor(secondary)
+        tvRealCaption?.text = "Inflation data unavailable"
+        tvInflationDetail?.text = "No CPI series for $fromCode/$toCode in this period."
+        tvDataStatus?.text = "Connect to the internet and try again."
+    }
+
+    private fun fmtPct(v: Double): String =
+        if (v.isNaN() || v.isInfinite()) "—" else String.format(Locale.US, "%+.1f%%", v)
+
+    /** Called after OTA patches finish loading so the headline can switch to the engine patch. */
+    fun onPatchesReloaded() {
+        lastRealTermsKey = null
+        if (isAdded && view != null) scheduleRealTermsRefresh(force = true)
+    }
+
+
     fun applyTheme(dark: Boolean) {
         val density = resources.displayMetrics.density
         val primaryText = Color.parseColor(if (dark) "#E6EBF0" else "#333333")
@@ -427,7 +599,6 @@ class CurrencyFragment : Fragment() {
         val pillBg = Color.parseColor(if (dark) "#181A1C" else "#EFEFEF")
         val strokePx = (1f * density).toInt().coerceAtLeast(1)
 
-        tvTitle?.setTextColor(primaryText)
         tvRateStatus?.setTextColor(accentColor)
         tvRateStatus?.background = GradientDrawable().apply {
             shape = GradientDrawable.RECTANGLE
@@ -436,7 +607,7 @@ class CurrencyFragment : Fragment() {
             setStroke(strokePx, cardStroke)
         }
 
-        listOf(fromCard, toCard).forEach { card ->
+        listOf(fromCard, toCard, fromYearCard, toYearCard).forEach { card ->
             card?.background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
                 cornerRadius = 10f * density
@@ -451,6 +622,23 @@ class CurrencyFragment : Fragment() {
         tvFromName?.setTextColor(secondaryText)
         tvToName?.setTextColor(secondaryText)
 
+        // Year selector labels + values (child 0 = label, child 1 = value).
+        listOf(fromYearCard, toYearCard).forEach { card ->
+            (card?.getChildAt(0) as? TextView)?.setTextColor(accentColor)
+            (card?.getChildAt(1) as? TextView)?.setTextColor(primaryText)
+        }
+        tvYearArrow?.setTextColor(secondaryText)
+
+        resultsCard?.background = GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            cornerRadius = 12f * density
+            setColor(cardBg)
+            setStroke(strokePx, cardStroke)
+        }
+        tvRealCaption?.setTextColor(primaryText)
+        tvInflationDetail?.setTextColor(secondaryText)
+        tvDataStatus?.setTextColor(secondaryText)
+
         tvCallInfo?.setTextColor(secondaryText)
         tvCallInfo?.background = GradientDrawable().apply {
             shape = GradientDrawable.RECTANGLE
@@ -460,7 +648,12 @@ class CurrencyFragment : Fragment() {
         }
 
         btnSwap?.isDarkThemeMode = dark
-        quickKeys.forEach { it.isDarkThemeMode = dark }
+        btnKeypadToggle?.isDarkThemeMode = dark
+
+        // Re-colour the real-terms headline (positive/negative palette depends on theme).
+        if (lastRealTermsKey != null && isAdded) {
+            scheduleRealTermsRefresh(force = true)
+        }
     }
 
     private fun openCurrencyPicker(isFrom: Boolean) {
@@ -622,6 +815,7 @@ class CurrencyFragment : Fragment() {
                     savePairPrefs(act)
                     updatePairCards()
                     updatePreviewAndRate()
+                    scheduleRealTermsRefresh(force = true)
                     dismissPicker()
                 }
             }
@@ -715,7 +909,431 @@ class CurrencyFragment : Fragment() {
         }
     }
 
+    private fun openYearPicker(isFrom: Boolean) {
+        removePickerImmediately()
+        val act = activity as? MainActivity ?: return
+        val root = act.binding.rootFrame
+        val dark = act.isDarkMode
+        val density = resources.displayMetrics.density
+        val dp = { v: Float -> (v * density).toInt() }
+
+        val cardBg = Color.parseColor(if (dark) "#222528" else "#FFFFFF")
+        val itemBg = Color.parseColor(if (dark) "#2A2E32" else "#F3F3F3")
+        val strokeColor = Color.parseColor(if (dark) "#34393F" else "#DCDCDC")
+        val primaryText = Color.parseColor(if (dark) "#E6EBF0" else "#333333")
+        val secondaryText = Color.parseColor(if (dark) "#8B95A0" else "#666666")
+        val accentColor = Color.parseColor(if (dark) "#13959B" else "#E58A7B")
+
+        val frostBmp = Frost.frozenBackdrop(root, downscale = 6, radius = 8)
+        val overlay = FrameLayout(act).apply {
+            elevation = 40f * density
+            isClickable = true
+            isFocusable = true
+            setOnClickListener { dismissPicker() }
+        }
+        if (frostBmp != null) {
+            overlay.addView(ImageView(act).apply {
+                setImageBitmap(frostBmp)
+                scaleType = ImageView.ScaleType.FIT_XY
+                alpha = 0.92f
+            }, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        }
+        overlay.addView(View(act).apply {
+            setBackgroundColor(Color.parseColor(if (dark) "#88101214" else "#77EAEAEA"))
+        }, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+
+        val modal = LinearLayout(act).apply {
+            orientation = LinearLayout.VERTICAL
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                cornerRadius = 16f * density
+                setColor(cardBg)
+                setStroke(dp(1.2f), accentColor)
+            }
+            setPadding(dp(14f), dp(14f), dp(14f), dp(14f))
+            isClickable = true
+            isFocusable = true
+            setOnClickListener { }
+        }
+
+        modal.addView(TextView(act).apply {
+            text = if (isFrom) "Real terms — From year" else "Real terms — To year"
+            textSize = 15f
+            setTypeface(typeface, Typeface.BOLD)
+            setTextColor(primaryText)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+        })
+        modal.addView(TextView(act).apply {
+            text = if (isFrom) "Start of the inflation comparison window"
+            else "End of the inflation comparison window"
+            textSize = 11.5f
+            setTextColor(secondaryText)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                topMargin = dp(2f)
+                bottomMargin = dp(10f)
+            }
+        })
+
+        val thisYear = java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)
+        val years = (thisYear downTo 1960).toList()
+        val selected = if (isFrom) fromYear else toYear
+
+        val rv = RecyclerView(act).apply {
+            layoutManager = LinearLayoutManager(act)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                0,
+                1f
+            )
+        }
+        rv.adapter = object : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
+            override fun getItemCount(): Int = years.size
+
+            override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
+                val tv = TextView(parent.context).apply {
+                    textSize = 15f
+                    gravity = Gravity.CENTER_VERTICAL
+                    setPadding(dp(14f), dp(11f), dp(14f), dp(11f))
+                    layoutParams = RecyclerView.LayoutParams(
+                        RecyclerView.LayoutParams.MATCH_PARENT,
+                        RecyclerView.LayoutParams.WRAP_CONTENT
+                    ).apply { bottomMargin = dp(6f) }
+                }
+                return object : RecyclerView.ViewHolder(tv) {}
+            }
+
+            override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
+                val year = years[position]
+                val tv = holder.itemView as TextView
+                val isSel = year == selected
+                tv.text = if (isSel) "$year   ✓" else year.toString()
+                tv.setTypeface(tv.typeface, if (isSel) Typeface.BOLD else Typeface.NORMAL)
+                tv.setTextColor(if (isSel) accentColor else primaryText)
+                tv.background = GradientDrawable().apply {
+                    shape = GradientDrawable.RECTANGLE
+                    cornerRadius = 8f * density
+                    setColor(itemBg)
+                    setStroke(dp(1f), if (isSel) accentColor else strokeColor)
+                }
+                tv.setOnClickListener {
+                    onYearSelected(isFrom, year)
+                    dismissPicker()
+                }
+            }
+        }
+        modal.addView(rv)
+
+        val modalW = minOf(root.width - dp(32f), dp(340f)).coerceAtLeast(dp(240f))
+        val modalH = (root.height * 0.62f).toInt()
+            .coerceIn(dp(260f), (root.height - dp(24f)).coerceAtLeast(dp(260f)))
+        overlay.addView(modal, FrameLayout.LayoutParams(modalW, modalH, Gravity.CENTER))
+        root.addView(
+            overlay,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+        )
+        pickerOverlay = overlay
+        pickerModal = modal
+        pickerList = rv
+        pickerClosing = false
+
+        overlay.alpha = 0f
+        overlay.animate().alpha(1f).setDuration(180L)
+            .setInterpolator(DecelerateInterpolator()).start()
+        modal.scaleX = 0.84f
+        modal.scaleY = 0.84f
+        modal.alpha = 0f
+        modal.translationY = dp(14f).toFloat()
+        pickerAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = 460L
+            interpolator = LinearInterpolator()
+            addUpdateListener { anim ->
+                val f = anim.animatedValue as Float
+                val step = springStep(f)
+                val scale = 0.84f + 0.16f * step
+                modal.scaleX = scale
+                modal.scaleY = scale
+                modal.alpha = (f * 3f).coerceAtMost(1f)
+                modal.translationY = dp(14f) * (1f - step)
+            }
+            addListener(object : AnimatorListenerAdapter() {
+                override fun onAnimationEnd(animation: Animator) {
+                    if (animation === pickerAnimator) pickerAnimator = null
+                    if (pickerClosing) return
+                    modal.scaleX = 1f
+                    modal.scaleY = 1f
+                    modal.alpha = 1f
+                    modal.translationY = 0f
+                }
+            })
+            start()
+        }
+        rv.post {
+            if (!isAdded || pickerOverlay !== overlay) return@post
+            val visible = minOf(rv.childCount, 14)
+            for (i in 0 until visible) {
+                val row = rv.getChildAt(i) ?: continue
+                row.alpha = 0f
+                row.translationX = dp(18f).toFloat()
+                row.scaleX = 0.97f
+                row.scaleY = 0.97f
+                row.animate()
+                    .alpha(1f).translationX(0f).scaleX(1f).scaleY(1f)
+                    .setStartDelay(120L + i * 20L)
+                    .setDuration(280L)
+                    .setInterpolator(DecelerateInterpolator())
+                    .start()
+            }
+        }
+    }
+
+    private fun onYearSelected(isFrom: Boolean, year: Int) {
+        if (isFrom) {
+            fromYear = year
+            if (toYear < fromYear) toYear = fromYear
+        } else {
+            toYear = year
+            if (fromYear > toYear) fromYear = toYear
+        }
+        context?.let { saveYearPrefs(it) }
+        updateYearCards()
+        scheduleRealTermsRefresh(force = true)
+    }
+
+    // =========================================================================
+    // Keypad dropdown (the always-on 4x4 pad moved behind the header button)
+    // =========================================================================
+
+    private fun toggleKeypadDropdown(anchor: View) {
+        if (keypadOverlay != null) dismissKeypadDropdown() else showKeypadDropdown(anchor)
+    }
+
+    private fun showKeypadDropdown(anchor: View) {
+        val act = activity as? MainActivity ?: return
+        val root = rootContainer ?: return
+        act.dismissButtonPopup()
+        removeKeypadImmediately()
+
+        val density = resources.displayMetrics.density
+        val dp = { v: Float -> (v * density).toInt() }
+        val dark = act.isDarkMode
+        val panelBg = Color.parseColor(if (dark) "#222528" else "#FFFFFF")
+        val strokeColor = Color.parseColor(if (dark) "#13959B" else "#E58A7B")
+
+        val panel = LinearLayout(act).apply {
+            orientation = LinearLayout.VERTICAL
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                cornerRadius = 14f * density
+                setColor(panelBg)
+                setStroke(dp(1.2f), strokeColor)
+            }
+            elevation = 12f * density
+            setPadding(dp(8f), dp(8f), dp(8f), dp(8f))
+            isClickable = true
+            isFocusable = true
+            visibility = View.INVISIBLE
+        }
+
+        fun key(label: String, role: KeyRole, widthDp: Float): NeumorphicKeyView {
+            return NeumorphicKeyView(act).apply {
+                text = label
+                textSize = if (label.length > 1) 13f else 15f
+                keyRole = role
+                cornerRadiusDp = 8.5f
+                shadowPadDp = 2.0f
+                isDarkThemeMode = dark
+                layoutParams = LinearLayout.LayoutParams(dp(widthDp), dp(40f)).apply {
+                    marginStart = dp(2f)
+                    marginEnd = dp(2f)
+                    topMargin = dp(2f)
+                    bottomMargin = dp(2f)
+                }
+                setOnClickListener {
+                    act.displaySpringPulse(this, 0.07f)
+                    when (label) {
+                        "=" -> {
+                            val expr = act.expressionText.trim().ifBlank { "0" }
+                            act.evaluateCurrencyConversion(expr, fromCode, toCode)
+                            dismissKeypadDropdown()
+                        }
+                        "()" -> act.onSmartBracketClicked()
+                        else -> act.onKeyClicked(label)
+                    }
+                    updatePreviewAndRate()
+                }
+                setOnLongClickListener { true }
+                holdListener = { held ->
+                    if (held) act.showButtonPopup(this, when (label) {
+                        "=" -> "= — converts the expression from $fromCode to $toCode and records it to History."
+                        "()" -> "( ) — smart bracket: opens or closes parentheses at the cursor."
+                        else -> act.keyDescriptionFor(label)
+                    }) else act.dismissButtonPopup()
+                }
+            }
+        }
+
+        val rows = listOf(
+            listOf("7", "8", "9", "\u232B"),
+            listOf("4", "5", "6", "()"),
+            listOf("1", "2", "3", ","),
+            listOf("0", ".", "AC", "=")
+        )
+        for (row in rows) {
+            val rowLl = LinearLayout(act).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER
+            }
+            for (label in row) {
+                val role = when (label) {
+                    "=" -> KeyRole.PRIMARY_EQUALS
+                    "AC", "\u232B", "()" -> KeyRole.UTILITY
+                    else -> KeyRole.DIGIT
+                }
+                rowLl.addView(key(label, role, 50f))
+            }
+            panel.addView(rowLl)
+        }
+
+        val overlay = FrameLayout(act).apply {
+            elevation = 48f * density
+            setBackgroundColor(Color.TRANSPARENT)
+            isClickable = true
+            isFocusable = true
+            setOnClickListener { dismissKeypadDropdown() }
+        }
+        var frostView: ImageView? = null
+        val frostBmp = Frost.frozenBackdrop(root, downscale = 6, radius = 8)
+        if (frostBmp != null) {
+            val frost = ImageView(act).apply {
+                setImageBitmap(frostBmp)
+                scaleType = ImageView.ScaleType.FIT_XY
+                alpha = 0f
+            }
+            frostView = frost
+            overlay.addView(frost, FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            ))
+        }
+        overlay.addView(
+            panel,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT
+            )
+        )
+        root.addView(
+            overlay,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+        )
+        keypadOverlay = overlay
+        btnKeypadToggle?.isAccentKey = true
+
+        fun positionAndAnimate() {
+            if (keypadOverlay !== overlay) return
+            val rootLoc = IntArray(2)
+            root.getLocationInWindow(rootLoc)
+            val anchorLoc = IntArray(2)
+            anchor.getLocationInWindow(anchorLoc)
+            val layerPad = dp(10f)
+            panel.measure(
+                View.MeasureSpec.makeMeasureSpec(
+                    (root.width - 2 * layerPad).coerceAtLeast(1),
+                    View.MeasureSpec.AT_MOST
+                ),
+                View.MeasureSpec.makeMeasureSpec(
+                    (root.height - 2 * layerPad).coerceAtLeast(1),
+                    View.MeasureSpec.AT_MOST
+                )
+            )
+            val bw = panel.measuredWidth
+            val bh = panel.measuredHeight
+            val anchorRight = anchorLoc[0] - rootLoc[0] + anchor.width
+            val anchorTop = anchorLoc[1] - rootLoc[1]
+            val anchorBottom = anchorTop + anchor.height
+            val showBelow = anchorBottom + bh + layerPad <= root.height - layerPad
+            val rawY = if (showBelow) anchorBottom + dp(4f) else anchorTop - bh - dp(4f)
+            val maxTop = (root.height - bh - layerPad).coerceAtLeast(layerPad)
+            val y = rawY.coerceIn(layerPad, maxTop)
+            val maxLeft = (root.width - bw - layerPad).coerceAtLeast(layerPad)
+            val x = (anchorRight - bw).coerceIn(layerPad, maxLeft)
+            (panel.layoutParams as FrameLayout.LayoutParams).apply {
+                width = bw
+                leftMargin = x
+                topMargin = y
+            }
+            panel.requestLayout()
+            panel.visibility = View.VISIBLE
+            panel.pivotX = bw.toFloat()
+            panel.pivotY = if (showBelow) 0f else bh.toFloat()
+            panel.translationY = if (showBelow) -10f * density else 10f * density
+            val anim = ValueAnimator.ofFloat(0f, 1f).apply {
+                duration = 420L
+                interpolator = LinearInterpolator()
+                addUpdateListener { a ->
+                    val f = a.animatedValue as Float
+                    val decay = Math.exp(-4.0 * f)
+                    val scale = (1.0 - 0.42 * decay * Math.cos(f * 3.0 * Math.PI)).toFloat()
+                    panel.scaleX = scale
+                    panel.scaleY = scale
+                    panel.alpha = (f / 0.22f).coerceIn(0f, 1f)
+                    panel.translationY =
+                        (if (showBelow) -10f * density else 10f * density) * (1f - f)
+                    frostView?.alpha = 0.92f * (f / 0.3f).coerceIn(0f, 1f)
+                }
+                start()
+                keypadAnimators.add(this)
+            }
+        }
+        if (root.width > 0 && anchor.width > 0) positionAndAnimate() else overlay.post { positionAndAnimate() }
+    }
+
+    private fun dismissKeypadDropdown() {
+        keypadAnimators.forEach { it.cancel() }
+        keypadAnimators.clear()
+        btnKeypadToggle?.isAccentKey = false
+        val overlay = keypadOverlay ?: return
+        keypadOverlay = null
+        val panel = overlay.getChildAt(overlay.childCount - 1)
+        if (panel != null) {
+            panel.animate()
+                .scaleX(0.62f).scaleY(0.62f).alpha(0f)
+                .setDuration(170L)
+                .setInterpolator(AccelerateInterpolator(0.8f))
+                .withEndAction { (overlay.parent as? FrameLayout)?.removeView(overlay) }
+                .start()
+        } else {
+            (overlay.parent as? FrameLayout)?.removeView(overlay)
+        }
+    }
+
+    private fun removeKeypadImmediately() {
+        keypadAnimators.forEach { it.cancel() }
+        keypadAnimators.clear()
+        btnKeypadToggle?.isAccentKey = false
+        keypadOverlay?.let { overlay ->
+            (overlay.parent as? FrameLayout)?.removeView(overlay)
+        }
+        keypadOverlay = null
+    }
+
     fun handleBackPressed(): Boolean {
+        if (keypadOverlay != null) {
+            dismissKeypadDropdown()
+            return true
+        }
         if (pickerOverlay != null) {
             dismissPicker()
             return true
@@ -904,6 +1522,7 @@ class CurrencyFragment : Fragment() {
         // already mid-shrink would otherwise leave the overlay attached to the
         // activity's root frame.
         removePickerImmediately()
+        removeKeypadImmediately()
         wobbleAnimators.forEach { it.cancel() }
         wobbleAnimators.clear()
         super.onDestroyView()

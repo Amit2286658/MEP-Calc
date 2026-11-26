@@ -150,6 +150,7 @@ object MathEngineManager {
         appContext = app
         worker.execute {
             runCatching { CurrencyConverter.initializeOfflineOnly(app) }
+            runCatching { InflationProvider.initializeOfflineOnly(app) }
             runCatching { ensureDefaultProject1Seeded(app) }
             runCatching { ensureStdlibOnlyEngineSync(app) }
         }
@@ -172,6 +173,7 @@ object MathEngineManager {
             var ok = false
             try {
                 runCatching { CurrencyConverter.initializeOfflineOnly(app) }
+                runCatching { InflationProvider.initializeOfflineOnly(app) }
                 runCatching { ensureDefaultProject1Seeded(app) }
                 val handle = ensureStdlibOnlyEngineSync(app)
                 ok = (handle != 0L)
@@ -529,6 +531,7 @@ object MathEngineManager {
             runCatching { MathEngineBridge.nativeSetImportDir(handle, sandboxDir) }
         }
         CurrencyConverter.registerWithEngine(handle)
+        InflationProvider.registerWithEngine(handle)
         for ((extName, cb) in customExternCallbacks) {
             runCatching { MathEngineBridge.nativeRegisterExtern(handle, extName, cb) }
         }
@@ -1034,6 +1037,7 @@ object MathEngineManager {
         patchBackgroundExecutor.execute {
             runCatching { MathPatchDownloader.ensureBundledPatchesSeeded(app) }
             runCatching { CurrencyConverter.initialize(app) }
+            runCatching { InflationProvider.initialize(app) }
             val downloaded = runCatching { MathPatchDownloader.syncMissingPatches(app, onStatus) }.getOrDefault(0)
             loadPendingPatches(
                 onDone = { loaded ->

@@ -279,6 +279,7 @@ class MainActivity : AppCompatActivity() {
                             showPatchStatusToast(summary)
                         }
                         refreshFunctionCatalogUI()
+                        (fragmentAt(5) as? CurrencyFragment)?.onPatchesReloaded()
                     }
                 }
             }
