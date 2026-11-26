@@ -13,7 +13,7 @@ running on a Pixel 4 (light), a Pixel 6 Pro (dark) and a Pixel Tablet
 | `screenshots/phone-light-0*.png` | Phone screenshots, light theme (1080 × 2280), 7 shots including the .math Studio. |
 | `screenshots/phone-dark-0*.png` | Phone screenshots, dark theme (1440 × 3120), same 7 shots. |
 | `screenshots/phone-*-landscape-*.png` | Landscape phone captures (2280 × 1080 light, 3120 × 1440 dark) showing the two-pane layout. |
-| `screenshots/tablet-light-*.png` | Tablet captures (1600 × 2560 portrait, 2560 × 1600 landscape) of the 1.0.19 tablet shell. |
+| `screenshots/tablet-light-*.png` | Tablet captures (1600 × 2560 portrait, 2560 × 1600 landscape) of the 1.0.20 tablet shell. |
 | `../PRIVACY.md` | Privacy policy URL: <https://github.com/Amit2286658/MEP-Calc/blob/main/PRIVACY.md> |
 
 ## Listing fields
@@ -70,6 +70,9 @@ FEATURES
   (KB/MB/GB/TB/PB) and binary (KiB/MiB/GiB/TiB/PiB) prefixes.
 • Currency converter with From/To pickers and editable rates; the last fetched
   rate table is cached so it also works offline.
+• Real-terms currency analysis: pick a From and To year and see how a currency
+  actually appreciated or depreciated after inflation, using World Bank CPI data
+  (relative purchasing-power parity).
 • Math Studio: write and run your own .math modules with functions, units,
   structs and multi-file projects, right on the phone.
 • Searchable catalog of every function with its signature and description.
@@ -79,24 +82,31 @@ FEATURES
 PRIVACY
 No accounts. No advertising. No analytics. The app stores your history and
 projects only on your device. Internet access is used solely to fetch currency
-rates and optional engine updates. Full policy:
+rates, inflation statistics and optional engine updates. Full policy:
 https://github.com/Amit2286658/MEP-Calc/blob/main/PRIVACY.md
 
 MEP Calc is open source. The engine is available at
 https://github.com/Amit2286658/Math-Engine-MEP
 ```
 
-## Version notes (build 1.0.19)
+## Version notes (build 1.0.20)
 
 ```
-• Tablets now have a layout of their own, in portrait and in landscape: the
-  display and the keypad sit side by side instead of the keypad stretching
-  across the whole screen.
-• Tablet keys keep calculator proportions — capped at 132 x 104 dp and
-  centred — so portrait no longer shows a grid of long, thin keys under a
-  mostly empty display. The currency converter pad is capped to match.
-• The tablet layout keeps clear of the Android 13+ taskbar at the bottom.
-• Phones are unchanged: portrait and landscape work exactly as in 1.0.18.
+• The Currency tab has been rebuilt around real-terms analysis. Pick a From and
+  To year under the two currency cards and the app shows whether the first
+  currency actually appreciated or depreciated against the second after
+  inflation — not just the raw exchange rate.
+• Results use World Bank consumer-price data for both economies (relative
+  purchasing-power parity), fetched once and cached for offline use. An
+  "Inflation data unavailable" note appears when a series is not published.
+• The exchange rate and its provider now sit in a slim pill on the left. The
+  numeric keypad moved behind the small keyboard button on the right and drops
+  down over the tab, so the currency cards and results have the whole screen.
+• The exact engine conversion call is still shown under the results, and the
+  same C11 engine computes the real-terms percentage through the new
+  [inflation] patch.
+• Tablets and both orientations are supported; the results pane scrolls on
+  short screens.
 ```
 
 ## Pre-upload checklist
@@ -105,11 +115,12 @@ https://github.com/Amit2286658/Math-Engine-MEP
 2. Upload 8 screenshots in this order: `phone-light-01`, `-02`, `-03`, `-05`,
    `-06`, `-07-studio`, `phone-dark-01`, `phone-dark-07-studio` (the rest are
    spares; every shot is a real capture, no mockups).
-   Then add `phone-light-landscape-01` and `phone-dark-landscape-05` after the
-   portrait set, and `tablet-light-portrait-01` + `tablet-light-landscape-01`
-   last to show the tablet shell in both orientations.
+   Then add `phone-light-landscape-01`, `phone-light-landscape-05` and
+   `phone-dark-landscape-05` after the portrait set, and
+   `tablet-light-portrait-01` + `tablet-light-landscape-01` last to show the
+   tablet shell in both orientations.
 3. Paste the short and full description above.
 4. Paste the privacy policy URL.
-5. Upload `ecalc-release-v19.apk` (signed, universal, from the
-   `ecalc-release-apk-v19` CI artifact) — **not** any `*-debug-*` or
+5. Upload `ecalc-release-v20.apk` (signed, universal, from the
+   `ecalc-release-apk-v20` CI artifact) — **not** any `*-debug-*` or
    `*CI-ONLY*` artifact.
