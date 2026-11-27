@@ -9,6 +9,9 @@
 #   real_change("USD", "INR", 2015, 2025) -> real appreciation of USD vs INR
 #   real_change_pct(...)                  -> the same result in percent
 #   real_value(1000, "USD", 2015, 2025)   -> 2015 money expressed in 2025 money
+#   convert_real(1000, "USD", 2015, "INR", 2025)
+#                                         -> 2015 USD converted to 2025 INR,
+#                                            inflation-adjusted on both sides
 #
 # The host app supplies the annual World Bank CPI series and backs the single
 # `@cpi_ratio(currency, from_year, to_year)` extern, which returns the
