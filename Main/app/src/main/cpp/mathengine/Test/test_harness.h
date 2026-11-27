@@ -45,6 +45,10 @@ bool host_checked_recip_cb(MemArena *mem, const SymTable *tab,
 bool host_cpi_ratio_cb(MemArena *mem, const SymTable *tab,
                        const Value *args, uint8_t argc,
                        void *user_ctx, Value *out_val);
+bool host_currency_convert_cb(MemArena *mem, const SymTable *tab,
+                              const Value *args, uint8_t argc,
+                              void *user_ctx, Value *out_val);
+void *host_fx_cache(void);
 void register_all_host_externs(Engine *eng);
 
 void print_architecture_report(const Engine *eng);

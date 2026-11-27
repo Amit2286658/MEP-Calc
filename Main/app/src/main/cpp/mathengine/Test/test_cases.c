@@ -439,6 +439,21 @@ static const CpiPoint g_cpi_points[] = {
     { "GBP", 2015, 100.0 }, { "GBP", 2025, 128.0 },
 };
 
+/* Latest reported CPI index at or before `year`, mirroring the app's floorKey snap.
+ * This is what makes the `9999` latest-year sentinel in convert_real() work. */
+static double cpi_index_at(const char *ccy, int year) {
+    double idx = -1.0;
+    int best = -1;
+    for (size_t i = 0; i < sizeof(g_cpi_points) / sizeof(g_cpi_points[0]); ++i) {
+        if (strcmp(g_cpi_points[i].ccy, ccy) != 0) continue;
+        if (g_cpi_points[i].year <= year && g_cpi_points[i].year > best) {
+            best = g_cpi_points[i].year;
+            idx = g_cpi_points[i].index;
+        }
+    }
+    return idx;
+}
+
 bool host_cpi_ratio_cb(MemArena *mem, const SymTable *tab,
                               const Value *args, uint8_t argc,
                               void *user_ctx, Value *out_val) {
@@ -455,12 +470,8 @@ bool host_cpi_ratio_cb(MemArena *mem, const SymTable *tab,
     }
     int y0 = (int)val_get_f64(mem, args[1]);
     int y1 = (int)val_get_f64(mem, args[2]);
-    double i0 = -1.0, i1 = -1.0;
-    for (size_t i = 0; i < sizeof(g_cpi_points) / sizeof(g_cpi_points[0]); ++i) {
-        if (strcmp(g_cpi_points[i].ccy, ccy) != 0) continue;
-        if (g_cpi_points[i].year == y0) i0 = g_cpi_points[i].index;
-        if (g_cpi_points[i].year == y1) i1 = g_cpi_points[i].index;
-    }
+    double i0 = cpi_index_at(ccy, y0);
+    double i1 = cpi_index_at(ccy, y1);
     if (i0 <= 0.0 || i1 <= 0.0) {
         /* Sentinel: the host has no CPI data for this currency/year range. */
         *out_val = val_from_f64(mem, -1.0);
@@ -470,14 +481,46 @@ bool host_cpi_ratio_cb(MemArena *mem, const SymTable *tab,
     return true;
 }
 
+/* `@currency_convert(from:str, to:str, amount:real)` — the app-side FX extern. */
+bool host_currency_convert_cb(MemArena *mem, const SymTable *tab,
+                              const Value *args, uint8_t argc,
+                              void *user_ctx, Value *out_val) {
+    (void)tab;
+    if (argc != 3) {
+        mem_err(mem, "@currency_convert expects (from:str, to:str, amount:real)");
+        return false;
+    }
+    char from_ccy[16], to_ccy[16];
+    if (!val_as_cstr(mem, args[0], from_ccy, sizeof(from_ccy)) ||
+        !val_as_cstr(mem, args[1], to_ccy,   sizeof(to_ccy))) {
+        mem_err(mem, "@currency_convert currency codes must be strings");
+        return false;
+    }
+    const FxRateCache *cache = (const FxRateCache *)user_ctx;
+    double from_per_usd = 0.0, to_per_usd = 0.0;
+    if (!lookup_usd_rate(cache, from_ccy, &from_per_usd) ||
+        !lookup_usd_rate(cache, to_ccy,   &to_per_usd)) {
+        mem_err(mem, "Unsupported currency pair '%s' -> '%s'", from_ccy, to_ccy);
+        return false;
+    }
+    double amount = val_get_f64(mem, args[2]);
+    *out_val = val_from_f64(mem, amount * (to_per_usd / from_per_usd));
+    return true;
+}
+
+void *host_fx_cache(void) {
+    return (void *)&g_fx_cache;
+}
+
 void register_all_host_externs(Engine *eng) {
-    eng_register_extern(eng, "cpi_ratio",   host_cpi_ratio_cb,   NULL);
-    eng_register_extern(eng, "fx_rate",     host_fx_rate_cb,     (void *)&g_fx_cache);
-    eng_register_extern(eng, "fx_set_rate", host_fx_set_rate_cb, (void *)&g_fx_cache);
-    eng_register_extern(eng, "fx_history",  host_fx_history_cb,  (void *)&g_fx_cache);
-    eng_register_extern(eng, "kv_set",      host_kv_set_cb,      (void *)&g_kv_store);
-    eng_register_extern(eng, "kv_get",      host_kv_get_cb,      (void *)&g_kv_store);
-    eng_register_extern(eng, "elem_mass",   host_elem_mass_cb,   NULL);
+    eng_register_extern(eng, "cpi_ratio",        host_cpi_ratio_cb,        NULL);
+    eng_register_extern(eng, "currency_convert", host_currency_convert_cb, (void *)&g_fx_cache);
+    eng_register_extern(eng, "fx_rate",          host_fx_rate_cb,          (void *)&g_fx_cache);
+    eng_register_extern(eng, "fx_set_rate",      host_fx_set_rate_cb,      (void *)&g_fx_cache);
+    eng_register_extern(eng, "fx_history",       host_fx_history_cb,       (void *)&g_fx_cache);
+    eng_register_extern(eng, "kv_set",           host_kv_set_cb,           (void *)&g_kv_store);
+    eng_register_extern(eng, "kv_get",           host_kv_get_cb,           (void *)&g_kv_store);
+    eng_register_extern(eng, "elem_mass",        host_elem_mass_cb,        NULL);
 }
 
 /* ============================================================================

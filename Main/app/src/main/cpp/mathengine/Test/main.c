@@ -1177,6 +1177,25 @@ int main(int argc, char **argv) {
                                (fabs(val_get_f64(&proj_eng->mem, pv4) - 40.74074074074074) < 1e-9) &&
                                eng_eval(proj_eng, "inflation_pct(\"INR\", 2015, 2025)", &pv4) &&
                                (fabs(val_get_f64(&proj_eng->mem, pv4) - 90.0) < 1e-9);
+            /* 1c) unified inflation-adjusted cross-currency conversion.
+             * FX stub: USD=1, EUR=0.92, INR=84 per USD; CPI stub: USD 100->135,
+             * INR 100->190, so convert_real() must restate both sides at the
+             * latest (2025) reference year of the live rate. */
+            (void)eng_register_extern(proj_eng, "currency_convert", host_currency_convert_cb, host_fx_cache());
+            Value pv5 = val_void();
+            bool p_convert_real =
+                eng_eval(proj_eng, "convert_real(1000, \"USD\", 2015, \"INR\", 2025)", &pv5) &&
+                (fabs(val_get_f64(&proj_eng->mem, pv5) - 113400.0) < 1e-6) &&
+                eng_eval(proj_eng, "convert_real(1000, \"USD\", 2015, \"INR\", 2015)", &pv5) &&
+                (fabs(val_get_f64(&proj_eng->mem, pv5) - 59684.21052631579) < 1e-6) &&
+                eng_eval(proj_eng, "convert_real(1000, \"USD\", 2015, \"USD\", 2025)", &pv5) &&
+                (fabs(val_get_f64(&proj_eng->mem, pv5) - 1350.0) < 1e-9) &&
+                eng_eval(proj_eng, "convert_real(1350, \"USD\", 2025, \"USD\", 2015)", &pv5) &&
+                (fabs(val_get_f64(&proj_eng->mem, pv5) - 1000.0) < 1e-9) &&
+                eng_eval(proj_eng, "convert_real(250, \"USD\", 2015, \"EUR\", 2025)", &pv5) &&
+                (fabs(val_get_f64(&proj_eng->mem, pv5) - 310.5) < 1e-9) &&
+                !eng_eval(proj_eng, "convert_real(1000, \"USD\", 2015.5, \"INR\", 2025)", &pv5) &&
+                !eng_eval(proj_eng, "convert_real(1000, \"JPY\", 2015, \"INR\", 2025)", &pv5);
             /* 2) Verify plain-quote "{25$ into RS}" / "{2km into m}" interpolation and `printl` / `println` */
             const char *ccy_v2 =
                 "[currency]\n"
@@ -1213,7 +1232,7 @@ int main(int argc, char **argv) {
                               !eng_has_entry(proj_eng) &&
                               eng_eval(proj_eng, "convert(2, \"USD\", \"INR\")", &pvc) &&
                               (val_get_f64(&proj_eng->mem, pvc) == 170.0);
-            sec17_patches_ok = p_fallback && p_inflation && p_hotreload && recycle_ok;
+            sec17_patches_ok = p_fallback && p_inflation && p_convert_real && p_hotreload && recycle_ok;
         }
         free(infl_patch);
         free(ccy_patch);
