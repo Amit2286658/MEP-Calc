@@ -106,3 +106,37 @@ real_change_pct(base:str, quote:str, from_year:real, to_year:real) -> real =
 # @return real — Equivalent amount in `to_year` money (same purchasing power)
 real_value(amount, currency:str, from_year:real, to_year:real) -> real =
     amount * cpi_factor(currency, from_year, to_year)
+
+# ==============================================================================
+# 4. Inflation-adjusted cross-currency conversion
+# ==============================================================================
+
+# @desc Converts an amount of `from_currency` in `from_year` into `to_currency` in `to_year`, adjusted for inflation in both economies (relative PPP). Formula: convert_real(amount, from, y0, to, y1) = amount * rate(from, to) * (CPI_to(y1)/CPI_to(latest)) / (CPI_from(y0)/CPI_from(latest)), where `latest` is the host's newest CPI observation (the reference year of the live exchange rate).
+# @param amount: real — Amount in `from_currency` at `from_year`
+# @param from_currency: str — ISO 4217 source currency code (e.g. `"USD"`)
+# @param from_year: real — Whole calendar year the amount belongs to
+# @param to_currency: str — ISO 4217 target currency code (e.g. `"INR"`)
+# @param to_year: real — Whole calendar year to express the result in
+# @return real — Equivalent amount in `to_currency` at `to_year`, with both sides adjusted for inflation
+convert_real(amount, from_currency:str, from_year:real, to_currency:str, to_year:real) -> real = {
+    y0 := round(from_year)
+    y1 := round(to_year)
+    if (y0 != from_year || y1 != to_year) {
+        error("convert_real(): years must be whole calendar years")
+    }
+    # g(c, y) = CPI(c, y) / CPI(c, latest). The host snaps the sentinel 9999 to its
+    # newest reported year, so `1 / cpi_factor(c, y, 9999)` is exactly that ratio.
+    # Years after the newest observation collapse to 1.0 (no further inflation).
+    g_from := 1 / cpi_factor(from_currency, y0, 9999)
+    g_to := 1 / cpi_factor(to_currency, y1, 9999)
+    rate := 1
+    if (from_currency != to_currency) {
+        rate = @currency_convert(from_currency, to_currency, 1)
+        if (rate != rate || rate <= 0) {
+            error("convert_real(): exchange rate unavailable for '" + from_currency + "' -> '" + to_currency + "'")
+        }
+    }
+    # Relative PPP: the real exchange rate is constant, so restate the live rate at
+    # the target year by dividing out the source price level and applying the target one.
+    amount * rate * g_to / g_from
+}
