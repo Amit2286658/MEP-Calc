@@ -4,12 +4,8 @@ import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
 import android.animation.ValueAnimator
 import android.content.Context
-import android.graphics.Bitmap
-import android.graphics.Canvas
 import android.graphics.Color
-import android.graphics.Path
 import android.graphics.Rect
-import android.graphics.RectF
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
@@ -333,76 +329,8 @@ class FunctionCatalogFragment : Fragment() {
      * `tvSecondaryDisplay`, while hiding the display text views during `Frost.frozenBackdrop` capture
      * so the blurred text behind them never produces a white tint or halo around the cutout.
      */
-    private fun createFrostedBackdropWithDisplayCutout(act: MainActivity, rootFrame: FrameLayout, dp: (Float) -> Int): ImageView? {
-        val dispPri = act.binding.tvPrimaryDisplay
-        val dispSec = act.binding.tvSecondaryDisplay
-        val dispAngle = act.binding.tvAngleMode
-        val dispMr = act.binding.mrDisplayCluster
-
-        val origPriVis = dispPri.visibility
-        val origSecVis = dispSec.visibility
-        val origAngleVis = dispAngle.visibility
-        val origMrVis = dispMr.visibility
-
-        // Temporarily mark the display text views INVISIBLE during the synchronous snapshot draw
-        // (View.draw skips INVISIBLE children without triggering a layout pass) so the text behind
-        // the cutout is never blurred into the frost bitmap, eliminating the white tint behind it.
-        dispPri.visibility = View.INVISIBLE
-        dispSec.visibility = View.INVISIBLE
-        dispAngle.visibility = View.INVISIBLE
-        if (origMrVis == View.VISIBLE) dispMr.visibility = View.INVISIBLE
-        val frostBmp = try {
-            Frost.frozenBackdrop(rootFrame, downscale = 6, radius = 6)
-        } finally {
-            dispPri.visibility = origPriVis
-            dispSec.visibility = origSecVis
-            dispAngle.visibility = origAngleVis
-            dispMr.visibility = origMrVis
-        } ?: return null
-
-        val outerPath = Path()
-        val holePath = Path()
-        val cutoutRect = RectF()
-        return object : ImageView(act) {
-            override fun onDraw(canvas: Canvas) {
-                if (dispPri.width > 0 && dispSec.width > 0 && width > 0 && height > 0) {
-                    val priLoc = IntArray(2)
-                    val secLoc = IntArray(2)
-                    val selfLoc = IntArray(2)
-                    dispPri.getLocationInWindow(priLoc)
-                    dispSec.getLocationInWindow(secLoc)
-                    getLocationInWindow(selfLoc)
-                    val leftB = (minOf(priLoc[0], secLoc[0]) - selfLoc[0] - dp(12f)).toFloat()
-                    val topB = (minOf(priLoc[1], secLoc[1]) - selfLoc[1] - dp(10f)).toFloat()
-                    val rightB = (maxOf(priLoc[0] + dispPri.width, secLoc[0] + dispSec.width) - selfLoc[0] + dp(12f)).toFloat()
-                    val bottomB = (maxOf(priLoc[1] + dispPri.height, secLoc[1] + dispSec.height) - selfLoc[1] + dp(10f)).toFloat()
-                    cutoutRect.set(
-                        leftB.coerceIn(0f, width.toFloat()),
-                        topB.coerceIn(0f, height.toFloat()),
-                        rightB.coerceIn(0f, width.toFloat()),
-                        bottomB.coerceIn(0f, height.toFloat())
-                    )
-                    outerPath.reset()
-                    outerPath.addRect(0f, 0f, width.toFloat(), height.toFloat(), Path.Direction.CW)
-                    holePath.reset()
-                    val r = dp(10f).toFloat()
-                    holePath.addRoundRect(cutoutRect, r, r, Path.Direction.CW)
-                    outerPath.op(holePath, Path.Op.DIFFERENCE)
-
-                    val saveCount = canvas.save()
-                    canvas.clipPath(outerPath)
-                    super.onDraw(canvas)
-                    canvas.restoreToCount(saveCount)
-                } else {
-                    super.onDraw(canvas)
-                }
-            }
-        }.apply {
-            setImageBitmap(frostBmp)
-            scaleType = ImageView.ScaleType.FIT_XY
-            alpha = 0f
-        }
-    }
+    private fun createFrostedBackdropWithDisplayCutout(act: MainActivity, rootFrame: FrameLayout, dp: (Float) -> Int): ImageView? =
+        Frost.frostedBackdropWithDisplayCutout(act, rootFrame, dp)
 
     // =========================================================================
     //  Lens Search Overlay: Horizontal Physics Expansion over Filter & Keypad,

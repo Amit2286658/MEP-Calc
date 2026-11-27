@@ -66,6 +66,8 @@ class MainActivity : AppCompatActivity() {
     internal var expressionText: String = ""
     internal var currentSecondaryFormula: String = "0.0"
     internal var lastAnswer: String = "0.0"
+    /** Expression that produced [lastAnswer]; used to keep M+/M− meaningful after = keeps the input. */
+    internal var lastEvaluatedExpression: String = ""
     /** Cursor position within expressionText (0..expressionText.length). 0 = before first char. */
     internal var cursorPos: Int = 0
     /** Simple one-slot memory: accumulates via M+/M−, cleared by MR button. */
@@ -771,14 +773,15 @@ class MainActivity : AppCompatActivity() {
             runOnUiThread {
                 if (outcome.ok) {
                     lastAnswer = outcome.value
-                    expressionText = outcome.value
-                    cursorPos = outcome.value.length
+                    lastEvaluatedExpression = amountExpr.trim()
                     val resultLine = "$callText = ${outcome.value} [${outcome.unit}]"
                     calculationHistory.add(0, resultLine)
                     refreshHistoryUI()
                     currentSecondaryFormula = resultLine
+                    // The typed amount stays on the primary display; the converted
+                    // answer goes to the answer line, exactly like the main = key.
                     refreshPrimaryDisplay(pulse = true)
-                    binding.tvSecondaryDisplay.text = resultLine
+                    binding.tvSecondaryDisplay.text = "${outcome.value} [${outcome.unit}]"
                     displaySpringPulse(binding.tvSecondaryDisplay, 0.035f)
                 } else {
                     val msg = outcome.error ?: "Conversion error"

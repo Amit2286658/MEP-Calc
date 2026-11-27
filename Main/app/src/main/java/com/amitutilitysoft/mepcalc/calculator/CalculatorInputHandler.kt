@@ -25,6 +25,20 @@ fun MainActivity.onKeyClicked(label: String) {
         return last !in "+-×÷/*^,( "
     }
 
+    /**
+     * The value M+/M− should absorb. Since `=` now keeps the expression, an
+     * unchanged post-evaluation expression uses the answer line rather than its
+     * trailing number token.
+     */
+    fun displayValueForMemory(): Double {
+        if (lastEvaluatedExpression.isNotBlank() && expressionText.trim() == lastEvaluatedExpression) {
+            lastAnswer.toDoubleOrNull()?.let { return it }
+        }
+        return expressionText.toDoubleOrNull()
+            ?: Regex("[-+]?\\d+(?:\\.\\d+)?$").find(expressionText)?.value?.toDoubleOrNull()
+            ?: 0.0
+    }
+
     fun insertOperator(opDisplay: String) {
         if (expressionText == "0.0") {
             expressionText = if (opDisplay == "-") "-" else "0$opDisplay"
@@ -109,18 +123,14 @@ fun MainActivity.onKeyClicked(label: String) {
             }
         }
         "M+" -> {
-            val value = expressionText.toDoubleOrNull()
-                ?: Regex("[-+]?\\d+(?:\\.\\d+)?$").find(expressionText)?.value?.toDoubleOrNull()
-                ?: 0.0
+            val value = displayValueForMemory()
             memoryValue += value
             binding.tvMrValue.text = formatValue(memoryValue)
             displaySpringPulse(binding.tvMrValue, 0.05f)
             return
         }
         "M-" -> {
-            val value = expressionText.toDoubleOrNull()
-                ?: Regex("[-+]?\\d+(?:\\.\\d+)?$").find(expressionText)?.value?.toDoubleOrNull()
-                ?: 0.0
+            val value = displayValueForMemory()
             memoryValue -= value
             binding.tvMrValue.text = formatValue(memoryValue)
             displaySpringPulse(binding.tvMrValue, 0.05f)
@@ -134,7 +144,14 @@ fun MainActivity.onKeyClicked(label: String) {
             clearIfDefaultZero()
             val p = cursorPos.coerceIn(0, expressionText.length)
             val before = expressionText.substring(0, p)
-            val ins = if (needsImplicitMul(before)) "×ans" else "ans"
+            val answer = lastAnswer.trim().ifEmpty { "0" }
+            val numeric = answer.toDoubleOrNull()
+            val token = when {
+                numeric == null || numeric.isNaN() || numeric.isInfinite() -> "0"
+                answer.startsWith("-") -> "($answer)"
+                else -> answer
+            }
+            val ins = if (needsImplicitMul(before)) "×$token" else token
             insertAtCursor(ins)
         }
         "π", "e" -> {
@@ -322,8 +339,7 @@ internal fun MainActivity.evaluateCurrent() {
         runOnUiThread {
             if (outcome.ok) {
                 lastAnswer = outcome.value
-                expressionText = outcome.value
-                cursorPos = outcome.value.length
+                lastEvaluatedExpression = fullDisplay
                 val unitTag = if (outcome.unit != "none") " [${outcome.unit}]" else ""
                 val resultLine = "$evalExpr = ${outcome.value}$unitTag"
                 if (!blankEval) {
@@ -331,8 +347,10 @@ internal fun MainActivity.evaluateCurrent() {
                     refreshHistoryUI()
                 }
                 currentSecondaryFormula = resultLine
+                // Keep the expression on the primary display; the evaluated answer now
+                // lives on the answer line (and in lastAnswer for the Ans key).
                 refreshPrimaryDisplay(pulse = true)
-                binding.tvSecondaryDisplay.text = resultLine
+                binding.tvSecondaryDisplay.text = "${outcome.value}$unitTag"
                 displaySpringPulse(binding.tvSecondaryDisplay, 0.035f)
             } else {
                 val msg = outcome.error ?: "Unknown error"

@@ -39,7 +39,6 @@ import kotlin.math.hypot
  */
 class CurrencyFragment : Fragment() {
 
-    private var rootContainer: FrameLayout? = null
     private var mainContent: LinearLayout? = null
     private var tvRateStatus: TextView? = null
     private var tvCallInfo: TextView? = null
@@ -71,6 +70,18 @@ class CurrencyFragment : Fragment() {
     private var btnKeypadToggle: NeumorphicKeyView? = null
     private var keypadOverlay: FrameLayout? = null
     private val keypadAnimators = mutableListOf<ValueAnimator>()
+
+    private var btnInsert: NeumorphicKeyView? = null
+    private var tvInsertLabel: TextView? = null
+
+    /**
+     * Span of the `convert_real(...)` call placed by the Insert button. While the span
+     * still points at a complete call, changing the From/To currency or year pickers
+     * rewrites its arguments in place; the amount the user types is preserved.
+     */
+    private var insertedRealRange: IntRange? = null
+    private var insertedRealSelectionKey: String? = null
+    private var syncingInsertedCall = false
 
     private var fromCode: String = "USD"
     private var toCode: String = "INR"
@@ -117,7 +128,6 @@ class CurrencyFragment : Fragment() {
                 ViewGroup.LayoutParams.MATCH_PARENT
             )
         }
-        rootContainer = root
 
         val content = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
@@ -217,6 +227,7 @@ class CurrencyFragment : Fragment() {
                 fromCode = toCode
                 toCode = tmp
                 savePairPrefs(ctx)
+                syncInsertedRealCall()
                 updatePairCards()
                 updatePreviewAndRate()
                 scheduleRealTermsRefresh(force = true)
@@ -336,6 +347,50 @@ class CurrencyFragment : Fragment() {
             0,
             1f
         ))
+
+        // 6. Insert: drop a ready-made convert_real(...) call at the cursor. It sits
+        // below everything else and uses the accent fill so it reads as the tab's
+        // primary action rather than another selector.
+        tvInsertLabel = TextView(ctx).apply {
+            text = "INFLATION-ADJUSTED CONVERSION"
+            textSize = 9.5f
+            setTypeface(typeface, Typeface.BOLD)
+            letterSpacing = 0.08f
+            setPadding(dp(8f), 0, dp(8f), dp(4f))
+        }
+        content.addView(tvInsertLabel)
+
+        btnInsert = NeumorphicKeyView(ctx).apply {
+            text = "Insert convert_real(...)"
+            textSize = 14f
+            keyRole = KeyRole.PRIMARY_EQUALS
+            cornerRadiusDp = 12f
+            shadowPadDp = 3f
+            isDarkThemeMode = activity.isDarkMode
+            contentDescription = "Insert an inflation-adjusted conversion at the cursor"
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                dp(48f)
+            ).apply {
+                marginStart = dp(4f)
+                marginEnd = dp(4f)
+                bottomMargin = dp(8f)
+            }
+            setOnClickListener {
+                activity.displaySpringPulse(this, 0.07f)
+                insertRealConversion()
+            }
+            setOnLongClickListener { true }
+            holdListener = { held ->
+                if (held) activity.showButtonPopup(
+                    this,
+                    "Insert — places convert_real(amount, from, fromYear, to, toYear) at the cursor " +
+                        "with your selected currencies and years filled in. Changing a currency or " +
+                        "year afterwards updates the inserted call automatically."
+                ) else activity.dismissButtonPopup()
+            }
+        }
+        content.addView(btnInsert)
 
         // Scroll in compact viewports (phone landscape) so the results card is never clipped.
         val scroll = ScrollView(ctx).apply {
@@ -462,6 +517,9 @@ class CurrencyFragment : Fragment() {
     }
 
     fun updatePreviewAndRate() {
+        // Ordinary typing can shift the tracked call; re-anchor it (without rewriting
+        // its arguments) so the next selector change still finds it.
+        reanchorInsertedRealCall()
         val act = activity as? MainActivity
         val expr = act?.expressionText?.trim().orEmpty()
         val typedVal = expr.toDoubleOrNull()
@@ -474,7 +532,11 @@ class CurrencyFragment : Fragment() {
             val rateStr = if (unitRate.isNaN()) "—" else formatCompact(unitRate)
             tvRateStatus?.text = "1 $fromCode = $rateStr $toCode • ${CurrencyConverter.lastProviderName}"
         }
-        tvCallInfo?.text = "currency_convert(${expr.ifBlank { "0" }}, \"$fromCode\", \"$toCode\")"
+        tvCallInfo?.text = if (containsEngineCurrencyCall(expr)) {
+            expr.ifBlank { "0" }
+        } else {
+            "currency_convert(${expr.ifBlank { "0" }}, \"$fromCode\", \"$toCode\")"
+        }
     }
 
     private fun formatCompact(v: Double): String {
@@ -483,6 +545,166 @@ class CurrencyFragment : Fragment() {
             String.format(Locale.US, "%.4g", v)
         } else {
             String.format(Locale.US, "%.4f", v).trimEnd('0').trimEnd('.')
+        }
+    }
+
+    // =========================================================================
+    // Insert: ready-made convert_real(...) call with selection-aware arguments
+    // =========================================================================
+
+    private fun currentSelectionKey(): String = "$fromCode|$fromYear|$toCode|$toYear"
+
+    /** True when the expression already contains an engine currency/inflation call. */
+    private fun containsEngineCurrencyCall(expr: String): Boolean {
+        val names = listOf(
+            "convert_real(", "convert_fx(", "currency_convert(", "fx_rate(",
+            "real_value(", "inflation_pct(", "real_change_pct("
+        )
+        return names.any { expr.contains(it, ignoreCase = true) }
+    }
+
+    /** Index of the `)` matching the `(` at [openIndex], or null if unbalanced. */
+    private fun matchingParen(text: String, openIndex: Int): Int? {
+        if (openIndex !in text.indices || text[openIndex] != '(') return null
+        var depth = 0
+        for (i in openIndex until text.length) {
+            when (text[i]) {
+                '(' -> depth++
+                ')' -> {
+                    depth--
+                    if (depth == 0) return i
+                }
+            }
+        }
+        return null
+    }
+
+    private fun insertRealConversion() {
+        val act = activity as? MainActivity ?: return
+        if (act.expressionText == "0.0" || act.expressionText == "0") {
+            act.expressionText = ""
+            act.cursorPos = 0
+        }
+        val p = act.cursorPos.coerceIn(0, act.expressionText.length)
+        val before = act.expressionText.substring(0, p)
+        val after = act.expressionText.substring(p)
+        val prev = before.trimEnd().lastOrNull()
+        val needsMul = prev != null && prev !in "+-×÷/*^,("
+        val prefix = "convert_real("
+        val call = prefix + ", \"$fromCode\", $fromYear, \"$toCode\", $toYear)"
+        val insertion = (if (needsMul) "×" else "") + call
+
+        act.expressionText = before + insertion + after
+        val callStart = p + (if (needsMul) 1 else 0)
+        act.cursorPos = callStart + prefix.length
+        insertedRealRange = callStart until (callStart + call.length)
+        insertedRealSelectionKey = currentSelectionKey()
+        act.refreshPrimaryDisplay(pulse = true)
+    }
+
+    /**
+     * Re-anchors [insertedRealRange] after ordinary typing shifted the text. If the
+     * tracked span no longer starts a balanced call, the nearest remaining
+     * `convert_real(...)` is adopted (there is normally only one).
+     */
+    private fun reanchorInsertedRealCall() {
+        val act = activity as? MainActivity ?: return
+        val tracked = insertedRealRange ?: return
+        val text = act.expressionText
+        val prefix = "convert_real("
+
+        fun closeOf(start: Int): Int? {
+            if (start < 0 || start + prefix.length > text.length) return null
+            if (!text.startsWith(prefix, start)) return null
+            return matchingParen(text, start + prefix.length - 1)
+        }
+
+        val trackedClose = closeOf(tracked.first)
+        if (trackedClose != null) {
+            insertedRealRange = tracked.first until (trackedClose + 1)
+            return
+        }
+
+        var search = text.indexOf(prefix)
+        var bestStart = -1
+        var bestDist = Int.MAX_VALUE
+        while (search >= 0) {
+            val close = closeOf(search)
+            if (close != null) {
+                val dist = kotlin.math.abs(search - tracked.first)
+                if (dist < bestDist) {
+                    bestDist = dist
+                    bestStart = search
+                }
+            }
+            search = text.indexOf(prefix, search + 1)
+        }
+        if (bestStart < 0) {
+            insertedRealRange = null
+            insertedRealSelectionKey = null
+            return
+        }
+        insertedRealRange = bestStart until (closeOf(bestStart)!! + 1)
+    }
+
+    /**
+     * Rewrites the tracked call's currency/year arguments when the From/To selectors
+     * change, keeping whatever amount the user has typed between the parentheses.
+     */
+    private fun syncInsertedRealCall() {
+        if (syncingInsertedCall) return
+        val act = activity as? MainActivity ?: return
+        reanchorInsertedRealCall()
+        val range = insertedRealRange ?: return
+        val key = currentSelectionKey()
+        if (key == insertedRealSelectionKey) return
+
+        val text = act.expressionText
+        val prefix = "convert_real("
+        val start = range.first
+        val open = start + prefix.length
+        val close = matchingParen(text, open - 1) ?: run {
+            insertedRealRange = null
+            return
+        }
+
+        // The amount is everything before the first comma at paren depth 1, so nested
+        // calls and comma-taking functions in the amount survive untouched.
+        var depth = 1
+        var comma = -1
+        var i = open
+        while (i < close) {
+            when (text[i]) {
+                '(' -> depth++
+                ')' -> depth--
+                ',' -> if (depth == 1) {
+                    comma = i
+                    i = close
+                }
+            }
+            i++
+        }
+        val amount = if (comma >= 0) text.substring(open, comma) else text.substring(open, close)
+        val newCall = "convert_real($amount, \"$fromCode\", $fromYear, \"$toCode\", $toYear)"
+        val oldLen = close + 1 - start
+        val oldCursor = act.cursorPos
+
+        act.expressionText = text.substring(0, start) + newCall + text.substring(close + 1)
+        insertedRealRange = start until (start + newCall.length)
+        insertedRealSelectionKey = key
+        act.cursorPos = when {
+            oldCursor <= start -> oldCursor
+            oldCursor >= close + 1 -> oldCursor + (newCall.length - oldLen)
+            oldCursor <= open -> oldCursor
+            comma >= 0 && oldCursor <= comma -> oldCursor
+            else -> start + prefix.length + amount.length
+        }
+
+        syncingInsertedCall = true
+        try {
+            act.refreshPrimaryDisplay(pulse = true)
+        } finally {
+            syncingInsertedCall = false
         }
     }
 
@@ -646,6 +868,9 @@ class CurrencyFragment : Fragment() {
             setColor(pillBg)
             setStroke(strokePx, cardStroke)
         }
+
+        tvInsertLabel?.setTextColor(accentColor)
+        btnInsert?.isDarkThemeMode = dark
 
         btnSwap?.isDarkThemeMode = dark
         btnKeypadToggle?.isDarkThemeMode = dark
@@ -813,6 +1038,7 @@ class CurrencyFragment : Fragment() {
                 row.setOnClickListener {
                     if (isFrom) fromCode = item.code else toCode = item.code
                     savePairPrefs(act)
+                    syncInsertedRealCall()
                     updatePairCards()
                     updatePreviewAndRate()
                     scheduleRealTermsRefresh(force = true)
@@ -1104,7 +1330,9 @@ class CurrencyFragment : Fragment() {
             if (fromYear > toYear) fromYear = toYear
         }
         context?.let { saveYearPrefs(it) }
+        syncInsertedRealCall()
         updateYearCards()
+        updatePreviewAndRate()
         scheduleRealTermsRefresh(force = true)
     }
 
@@ -1118,7 +1346,7 @@ class CurrencyFragment : Fragment() {
 
     private fun showKeypadDropdown(anchor: View) {
         val act = activity as? MainActivity ?: return
-        val root = rootContainer ?: return
+        val root = act.binding.rootFrame
         act.dismissButtonPopup()
         removeKeypadImmediately()
 
@@ -1162,7 +1390,14 @@ class CurrencyFragment : Fragment() {
                     when (label) {
                         "=" -> {
                             val expr = act.expressionText.trim().ifBlank { "0" }
-                            act.evaluateCurrencyConversion(expr, fromCode, toCode)
+                            if (containsEngineCurrencyCall(expr)) {
+                                // A ready-made conversion (e.g. convert_real(...)) must be
+                                // evaluated as-is; wrapping it in currency_convert again
+                                // would convert an already-converted amount.
+                                act.onKeyClicked("=")
+                            } else {
+                                act.evaluateCurrencyConversion(expr, fromCode, toCode)
+                            }
                             dismissKeypadDropdown()
                         }
                         "()" -> act.onSmartBracketClicked()
@@ -1173,7 +1408,11 @@ class CurrencyFragment : Fragment() {
                 setOnLongClickListener { true }
                 holdListener = { held ->
                     if (held) act.showButtonPopup(this, when (label) {
-                        "=" -> "= — converts the expression from $fromCode to $toCode and records it to History."
+                        "=" -> if (containsEngineCurrencyCall(act.expressionText)) {
+                            "= — evaluates the full expression (including convert_real) and records it to History."
+                        } else {
+                            "= — converts the expression from $fromCode to $toCode and records it to History."
+                        }
                         "()" -> "( ) — smart bracket: opens or closes parentheses at the cursor."
                         else -> act.keyDescriptionFor(label)
                     }) else act.dismissButtonPopup()
@@ -1210,16 +1449,11 @@ class CurrencyFragment : Fragment() {
             isFocusable = true
             setOnClickListener { dismissKeypadDropdown() }
         }
-        var frostView: ImageView? = null
-        val frostBmp = Frost.frozenBackdrop(root, downscale = 6, radius = 8)
-        if (frostBmp != null) {
-            val frost = ImageView(act).apply {
-                setImageBitmap(frostBmp)
-                scaleType = ImageView.ScaleType.FIT_XY
-                alpha = 0f
-            }
-            frostView = frost
-            overlay.addView(frost, FrameLayout.LayoutParams(
+        // Frost the whole window (not just this fragment) with the display kept sharp,
+        // matching the Function Catalog's mini-keypad backdrop.
+        val frostView = Frost.frostedBackdropWithDisplayCutout(act, root, dp)
+        if (frostView != null) {
+            overlay.addView(frostView, FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.MATCH_PARENT
             ))
@@ -1306,6 +1540,9 @@ class CurrencyFragment : Fragment() {
         btnKeypadToggle?.isAccentKey = false
         val overlay = keypadOverlay ?: return
         keypadOverlay = null
+        for (i in 0 until overlay.childCount - 1) {
+            overlay.getChildAt(i).animate().alpha(0f).setDuration(170L).start()
+        }
         val panel = overlay.getChildAt(overlay.childCount - 1)
         if (panel != null) {
             panel.animate()
@@ -1523,6 +1760,8 @@ class CurrencyFragment : Fragment() {
         // activity's root frame.
         removePickerImmediately()
         removeKeypadImmediately()
+        insertedRealRange = null
+        insertedRealSelectionKey = null
         wobbleAnimators.forEach { it.cancel() }
         wobbleAnimators.clear()
         super.onDestroyView()

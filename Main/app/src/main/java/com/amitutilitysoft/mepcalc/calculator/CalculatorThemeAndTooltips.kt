@@ -671,7 +671,8 @@ internal fun MainActivity.tabDescriptionFor(name: String): String = when (name) 
     "Catalog" -> "Functions Catalog (stdlib + patches + project1) — live-synced list of all functions, custom/overloaded operators, " +
         "and constants from stdlib, global .math patches, and project1. Tap any item to insert it into the expression; hold any item to view its frosted popup info window."
     "Currency" -> "Currency Converter (From → To) — converts between 55+ global currencies using the C11 Math Engine " +
-        "and live/cached exchange rates. Tap From or To to search currencies, or tap = to evaluate and record to History."
+        "and live/cached exchange rates. Tap From or To to search currencies, use Insert to drop an " +
+        "inflation-adjusted convert_real(...) call at the cursor, or tap = to evaluate and record to History."
     else -> "$name — open this tab"
 }
 
@@ -680,8 +681,8 @@ fun MainActivity.keyDescriptionFor(label: String): String = when (label) {
     "⌫" -> "⌫ — Backspace: deletes the last typed character of the current operand; if the operand is empty it trims the trailing token of the expression."
     "M+" -> "M+ — adds the value currently on the display to the memory slot. The MR value under the display updates immediately."
     "M-" -> "M− — subtracts the value currently on the display from the memory slot. Useful for running totals without a paper trail."
-    "=" -> "= — evaluates the full expression with the native Math-Engine and records 'expr = result' into History (tap a History entry to reuse a result)."
-    "Ans" -> "Ans — inserts the last computed answer into the expression: tap initially to start with it, tap again to append. chains like Ans+1, Ans×2 work."
+    "=" -> "= — evaluates the full expression with the native Math-Engine and records 'expr = result' into History. The expression stays on the display; the answer appears on the line below and is reused by Ans."
+    "Ans" -> "Ans — places the last computed answer into the expression at the cursor; chains like Ans+1 and Ans×2 work."
     "x" -> "× — multiplication"
     "÷" -> "÷ — division (0 ÷ anything stays 0; nonzero ÷ 0 reports a division error)"
     "+" -> "+ — addition"
