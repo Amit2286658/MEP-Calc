@@ -340,17 +340,15 @@ class CurrencyFragment : Fragment() {
         }
         content.addView(tvCallInfo)
 
-        // Absorb the space the old always-on keypad used to fill; the pad now lives
-        // behind the header dropdown.
-        content.addView(View(ctx), LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT,
-            0,
-            1f
-        ))
+        // 6. Insert bar: pinned to the bottom of the tab so it is always fully
+        // visible, even on short phones where the content above needs to scroll.
+        // It uses the accent fill so it reads as the tab's primary action rather
+        // than another selector.
+        val insertBar = LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(0, dp(2f), 0, dp(2f))
+        }
 
-        // 6. Insert: drop a ready-made convert_real(...) call at the cursor. It sits
-        // below everything else and uses the accent fill so it reads as the tab's
-        // primary action rather than another selector.
         tvInsertLabel = TextView(ctx).apply {
             text = "INFLATION-ADJUSTED CONVERSION"
             textSize = 9.5f
@@ -358,7 +356,7 @@ class CurrencyFragment : Fragment() {
             letterSpacing = 0.08f
             setPadding(dp(8f), 0, dp(8f), dp(4f))
         }
-        content.addView(tvInsertLabel)
+        insertBar.addView(tvInsertLabel)
 
         btnInsert = NeumorphicKeyView(ctx).apply {
             text = "Insert convert_real(...)"
@@ -390,19 +388,31 @@ class CurrencyFragment : Fragment() {
                 ) else activity.dismissButtonPopup()
             }
         }
-        content.addView(btnInsert)
+        insertBar.addView(btnInsert)
 
         // Scroll in compact viewports (phone landscape) so the results card is never clipped.
         val scroll = ScrollView(ctx).apply {
-            isFillViewport = true
             overScrollMode = View.OVER_SCROLL_NEVER
             addView(content)
+        }
+
+        val column = LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
             layoutParams = FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.MATCH_PARENT
             )
         }
-        root.addView(scroll)
+        column.addView(scroll, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            0,
+            1f
+        ))
+        column.addView(insertBar, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        ))
+        root.addView(column)
 
         updatePairCards()
         updateYearCards()
