@@ -132,6 +132,12 @@ jobs:
             # drop a marker file into the artifact so the mix-up is visible.
             IMG=$(python3 -c "import struct;d=open('$GITHUB_WORKSPACE/shots/01-home.png','rb').read(24);print(*(struct.unpack('>II',d[16:24])))"); set -- $IMG; echo "first capture: ${1}x${2}"; if { [ "${{ matrix.rotation }}" = "landscape" ] && [ "$1" -le "$2" ]; } || { [ "${{ matrix.rotation }}" = "portrait" ] && [ "$1" -ge "$2" ]; }; then echo "::warning::${{ matrix.rotation }} leg captured ${1}x${2}"; echo "expected ${{ matrix.rotation }}, got ${1}x${2}" > "$GITHUB_WORKSPACE/shots/ORIENTATION-FAILED.txt"; fi
             SZ=$(adb shell wm size | tr -d '\r' | sed -n 's/.*size: \([0-9]*x[0-9]*\).*/\1/p' | tail -1); W=${SZ%x*}; H=${SZ#*x*}; if [ "${{ matrix.rotation }}" = "landscape" ] && [ "$W" -lt "$H" ]; then T=$W; W=$H; H=$T; elif [ "${{ matrix.rotation }}" = "portrait" ] && [ "$W" -gt "$H" ]; then T=$W; W=$H; H=$T; fi; X1=$((W*8/10)); X2=$((W*12/100)); Y=$((H*62/100)); for p in 1 2 3 4 5; do adb shell input swipe "$X1" "$Y" "$X2" "$Y" 600; sleep 3; adb exec-out screencap -p > "$GITHUB_WORKSPACE/shots/0$((p+1))-page$((p+1)).png"; done; ls -la "$GITHUB_WORKSPACE/shots"
+            # Currency tab: a landscape fling can skip pages, so the swipe loop
+            # above may not land on it. Tap the tab by its accessibility label,
+            # capture a dedicated store shot, then restore the catalog tab so the
+            # studio walk-back below still starts from the same page as before.
+            adb shell uiautomator dump /sdcard/window_dump.xml >/dev/null 2>&1; adb pull /sdcard/window_dump.xml "$GITHUB_WORKSPACE/window_dump.xml" >/dev/null 2>&1; T=$(python3 "$GITHUB_WORKSPACE/.github/ci/tap_tab.py" "$GITHUB_WORKSPACE/window_dump.xml" "Currency Converter" 2>/dev/null || true); if [ -n "$T" ]; then adb shell input tap $T; sleep 4; adb exec-out screencap -p > "$GITHUB_WORKSPACE/shots/08-currency.png"; fi
+            adb shell uiautomator dump /sdcard/window_dump.xml >/dev/null 2>&1; adb pull /sdcard/window_dump.xml "$GITHUB_WORKSPACE/window_dump.xml" >/dev/null 2>&1; T=$(python3 "$GITHUB_WORKSPACE/.github/ci/tap_tab.py" "$GITHUB_WORKSPACE/window_dump.xml" "All Functions (stdlib + patches + project1)" 2>/dev/null || true); if [ -n "$T" ]; then adb shell input tap $T; sleep 3; fi
             # 7th shot: the .math Studio page, reached with the app's own gesture
             # (swipe left across the display). Walk back to the first keypad page
             # first so the swipe starts on a page that owns the gesture.
