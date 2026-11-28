@@ -22,8 +22,8 @@ import java.util.concurrent.TimeUnit
  * inflation-adjusted cross-currency conversion. It calls the single host extern
  * `@cpi_ratio(currency, fromPeriod, toPeriod)`; this object supplies that ratio from
  * the IMF SDMX 3.0 Consumer Price Index dataset (`IMF.STA/CPI`, monthly index `IX`),
- * falling back per-economy to the World Bank annual series (`FP.CPI.TOTL.ZG`) only
- * when an economy is absent from the IMF monthly feed.
+ * falling back to quarterly IMF CPI (`Q`) and then World Bank annual (`FP.CPI.TOTL.ZG`)
+ * only for economies absent from the IMF monthly feed.
  *
  * Period encoding:
  * - 6-digit packed `YYYYMM` (`year * 100 + month`, e.g. `202610` = Oct 2026) for monthly lookups.
@@ -38,15 +38,15 @@ import java.util.concurrent.TimeUnit
  *   must never block, so [cpiRatio] only reads the in-memory table and returns `-1.0` when the
  *   requested currency/period is not cached yet. The UI calls [ensureDataAsync] first and only
  *   evaluates the patch once the data is present.
- * - **Coherent index series per economy.** Different index types (`CPI` vs `HICP`) and
- *   frequencies (`M` vs `Q`) are parsed into separate buckets and ranked (`CPI/M` > `HICP/M` >
- *   `CPI/Q` > `HICP/Q`) so base years are never mixed within one economy's series.
+ * - **Strict series isolation.** Every SDMX CSV row is bucketed by its full series identity
+ *   (all dimension columns except time/value/status) so different base years or index variants
+ *   are never merged into the same `TreeMap`.
  */
 object InflationProvider {
 
     private const val TAG = "InflationProvider"
     private const val CACHE_FILE_NAME = "inflation_imf_cpi_cache.json"
-    private const val CACHE_VERSION = 2
+    private const val CACHE_VERSION = 3
     private const val CACHE_TTL_MS = 3L * 24L * 60L * 60L * 1000L // 3 days
     private const val RETRY_BACKOFF_MS = 6L * 60L * 60L * 1000L // 6 hours after a failed fetch
     private const val CONNECT_TIMEOUT_MS = 5_000L
@@ -63,15 +63,19 @@ object InflationProvider {
     private const val SOURCE_WB = "WB"
 
     /**
-     * IMF SDMX 3.0 public REST endpoint for Consumer Price Index (`IMF.STA/CPI`).
+     * IMF SDMX 3.0 public REST endpoint for monthly Consumer Price Index (`IMF.STA/CPI`).
      * Dimensions: `COUNTRY.INDEX_TYPE.COICOP_1999.TYPE_OF_TRANSFORMATION.FREQUENCY`
      * - `~` selects the latest published dataflow version.
-     * - `CPI+HICP` covers national CPI and Eurostat HICP (e.g. Euro Area).
-     * - `_T` = All items, `IX` = Index level, `M+Q` = Monthly (with Quarterly fallback).
+     * - `CPI` = Consumer Price Index, `_T` = All items, `IX` = Index level, `M` = Monthly.
      */
-    private const val IMF_CPI_URL =
+    private const val IMF_CPI_MONTHLY_URL =
         "https://api.imf.org/external/sdmx/3.0/data/dataflow/IMF.STA/CPI/~/" +
-            "%s.CPI+HICP._T.IX.M+Q?c[TIME_PERIOD]=ge:%d-M01"
+            "%s.CPI._T.IX.M?c[TIME_PERIOD]=ge:%d-M01"
+
+    /** Secondary IMF query for quarterly-only economies (e.g. historical AUS/NZL). */
+    private const val IMF_CPI_QUARTERLY_URL =
+        "https://api.imf.org/external/sdmx/3.0/data/dataflow/IMF.STA/CPI/~/" +
+            "%s.CPI._T.IX.Q?c[TIME_PERIOD]=ge:%d-Q1"
 
     /** Per-economy fallback if an economy has no IMF monthly/quarterly CPI series. */
     private const val WORLDBANK_URL =
@@ -81,6 +85,11 @@ object InflationProvider {
     private val MONTH_ABBR = arrayOf(
         "Jan", "Feb", "Mar", "Apr", "May", "Jun",
         "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+    )
+
+    private val NON_SERIES_KEY_COLS = setOf(
+        "TIME_PERIOD", "OBS_VALUE", "OBS_STATUS", "TIME_FORMAT",
+        "CONF_STATUS", "LAST_UPDATED", "OBS_COMMENT", "COMMENT_OBS"
     )
 
     private val httpClient = OkHttpClient.Builder()
@@ -386,8 +395,9 @@ object InflationProvider {
         System.currentTimeMillis() - data.fetchedAtMs > CACHE_TTL_MS
 
     /**
-     * Fetches the requested economies from IMF SDMX 3.0 (`IMF.STA/CPI`), falling back to
-     * World Bank annual CPI only for any economy absent from the IMF response.
+     * Fetches the requested economies from IMF SDMX 3.0 (`IMF.STA/CPI`, monthly first,
+     * then quarterly for any missing economy), falling back to World Bank annual CPI
+     * only for economies absent from the IMF responses.
      */
     private fun fetchCountries(countries: List<String>, onDone: ((Boolean) -> Unit)?) {
         if (countries.isEmpty()) {
@@ -407,16 +417,29 @@ object InflationProvider {
                 return
             }
 
-            val imfParsed = fetchImfMonthlyCpi(toFetch)
-            imfParsed.forEach { (country, series) ->
+            // 1. Primary: IMF SDMX 3.0 monthly CPI index (CPI._T.IX.M)
+            val imfMonthly = fetchImfCpi(toFetch, IMF_CPI_MONTHLY_URL)
+            imfMonthly.forEach { (country, series) ->
                 if (series.isNotEmpty()) {
                     seriesByCountry[country] = CountryCpi(TreeMap(series), now, SOURCE_IMF)
                     lastFailureMs.remove(country)
                 }
             }
 
-            // Per-economy fallback to World Bank annual CPI if IMF returned no rows for a code.
-            val missingAfterImf = toFetch.filter { imfParsed[it].isNullOrEmpty() }
+            // 2. Secondary: IMF SDMX 3.0 quarterly CPI index for quarterly-only economies (e.g. AUS/NZL)
+            val missingAfterMonthly = toFetch.filter { imfMonthly[it].isNullOrEmpty() }
+            if (missingAfterMonthly.isNotEmpty()) {
+                val imfQuarterly = fetchImfCpi(missingAfterMonthly, IMF_CPI_QUARTERLY_URL)
+                imfQuarterly.forEach { (country, series) ->
+                    if (series.isNotEmpty()) {
+                        seriesByCountry[country] = CountryCpi(TreeMap(series), now, SOURCE_IMF)
+                        lastFailureMs.remove(country)
+                    }
+                }
+            }
+
+            // 3. Tertiary: World Bank annual CPI only if IMF returned no series for an economy
+            val missingAfterImf = toFetch.filter { seriesByCountry[it]?.monthlyIndex.isNullOrEmpty() }
             if (missingAfterImf.isNotEmpty()) {
                 val wbParsed = fetchWorldBankFallback(missingAfterImf)
                 wbParsed.forEach { (imfCountry, series) ->
@@ -445,10 +468,13 @@ object InflationProvider {
         }
     }
 
-    private fun fetchImfMonthlyCpi(countries: List<String>): Map<String, TreeMap<Int, Double>> {
+    private fun fetchImfCpi(
+        countries: List<String>,
+        urlTemplate: String
+    ): Map<String, TreeMap<Int, Double>> {
         val url = String.format(
             Locale.US,
-            IMF_CPI_URL,
+            urlTemplate,
             countries.joinToString("+"),
             FIRST_YEAR
         )
@@ -461,7 +487,7 @@ object InflationProvider {
         return runCatching {
             httpClient.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) {
-                    Log.w(TAG, "IMF SDMX HTTP ${response.code} for $countries")
+                    Log.w(TAG, "IMF SDMX HTTP ${response.code} for $url")
                     return@use emptyMap()
                 }
                 val body = response.body?.string().orEmpty()
@@ -475,8 +501,9 @@ object InflationProvider {
 
     /**
      * Parses an IMF SDMX 3.0 CSV response (`Accept: text/csv`) into `country -> (YYYYMM -> index)`.
-     * Keeps `(indexType, frequency)` buckets separate so base years are never mixed, then selects
-     * the highest-priority coherent series per country (`CPI/M` > `HICP/M` > `CPI/Q` > `HICP/Q`).
+     * Buckets observations by full series identity (all non-time/non-value/non-status columns)
+     * so different base years or index variants are never mixed, then selects the coherent series
+     * per country that reaches the latest period (breaking ties by observation count).
      */
     internal fun parseImfSdmxCsv(body: String): Map<String, TreeMap<Int, Double>> {
         if (body.isBlank()) return emptyMap()
@@ -489,10 +516,11 @@ object InflationProvider {
         val colValue = header.indexOfFirst { it == "OBS_VALUE" }
         if (colCountry < 0 || colTime < 0 || colValue < 0) return emptyMap()
 
-        val colIndexType = header.indexOfFirst { it == "INDEX_TYPE" }
-        val colFreq = header.indexOfFirst { it == "FREQUENCY" || it == "FREQ" }
+        val keyCols = header.indices.filter { idx ->
+            idx != colCountry && header[idx] !in NON_SERIES_KEY_COLS
+        }
 
-        // country -> bucketKey ("CPI|M", "HICP|M", "CPI|Q", "HICP|Q") -> (YYYYMM -> index)
+        // country -> fullSeriesKey -> (YYYYMM -> index)
         val buckets = HashMap<String, HashMap<String, TreeMap<Int, Double>>>()
 
         while (lines.hasNext()) {
@@ -506,28 +534,23 @@ object InflationProvider {
             val timeRaw = cols[colTime].trim().uppercase(Locale.US)
             val ym = parseImfTimePeriod(timeRaw) ?: continue
 
-            val idxType = if (colIndexType >= 0 && colIndexType < cols.size) {
-                cols[colIndexType].trim().uppercase(Locale.US).ifEmpty { "CPI" }
-            } else "CPI"
-            val freq = if (colFreq >= 0 && colFreq < cols.size) {
-                cols[colFreq].trim().uppercase(Locale.US).ifEmpty {
-                    if (timeRaw.contains("-Q")) "Q" else "M"
+            val seriesKey = buildString {
+                for (k in keyCols) {
+                    if (k < cols.size) append(cols[k].trim().uppercase(Locale.US))
+                    append('|')
                 }
-            } else if (timeRaw.contains("-Q")) "Q" else "M"
-
-            val bucketKey = "$idxType|$freq"
+            }
             buckets
                 .getOrPut(country) { HashMap() }
-                .getOrPut(bucketKey) { TreeMap() }[ym] = value
+                .getOrPut(seriesKey) { TreeMap() }[ym] = value
         }
 
-        val priority = listOf("CPI|M", "HICP|M", "CPI|Q", "HICP|Q")
         val out = HashMap<String, TreeMap<Int, Double>>()
         for ((country, countryBuckets) in buckets) {
-            val chosen = priority.firstNotNullOfOrNull { key ->
-                countryBuckets[key]?.takeIf { it.isNotEmpty() }
-            } ?: countryBuckets.values.maxByOrNull { it.size }
-            if (chosen != null && chosen.isNotEmpty()) {
+            val chosen = countryBuckets.values
+                .filter { it.isNotEmpty() }
+                .maxWithOrNull(compareBy<TreeMap<Int, Double>> { it.lastKey() }.thenBy { it.size })
+            if (chosen != null) {
                 out[country] = chosen
             }
         }

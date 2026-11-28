@@ -151,6 +151,18 @@ object MathPatchDownloader {
                     invalidateCompiledCache(dir)
                 }
             }
+            val inflFile = File(dir, "inflation.math")
+            val existingInfl = if (inflFile.isFile && inflFile.canRead()) inflFile.readText(Charsets.UTF_8) else ""
+            if (existingInfl.isBlank() || !existingInfl.contains("from_month:real")) {
+                val bundledInfl = runCatching {
+                    context.assets.open("patches/inflation.math").bufferedReader(Charsets.UTF_8).use { it.readText() }
+                }.getOrNull()
+                if (!bundledInfl.isNullOrBlank() && bundledInfl != existingInfl) {
+                    inflFile.writeText(bundledInfl, Charsets.UTF_8)
+                    invalidateCompiledCache(dir)
+                    Log.i(TAG, "Upgraded bundled inflation.math to monthly overloads")
+                }
+            }
             runCatching {
                 val bundledOther = context.assets.list("patches")
                     ?.filter { it.endsWith(".math") && it != "currency.math" }
@@ -369,6 +381,15 @@ object MathPatchDownloader {
         // normalised once at seed time (see ensureBundledPatchesSeeded), not per
         // download.
         val bytes = rawVerified
+        // Do not let an older remote inflation.math downgrade a bundled monthly-capable copy.
+        if (fileName == "inflation.math" && targetFile.isFile && targetFile.canRead()) {
+            val localText = runCatching { targetFile.readText(Charsets.UTF_8) }.getOrDefault("")
+            val remoteText = String(bytes, Charsets.UTF_8)
+            if (localText.contains("from_month:real") && !remoteText.contains("from_month:real")) {
+                Log.i(TAG, "Kept newer local monthly inflation.math over legacy remote copy")
+                return PatchFileSyncResult.UP_TO_DATE
+            }
+        }
 
         dir.mkdirs()
         val tmpFile = File(dir, ".$fileName.tmp")
