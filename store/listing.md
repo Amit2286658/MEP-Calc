@@ -13,7 +13,7 @@ running on a Pixel 4 (light), a Pixel 6 Pro (dark) and a Pixel Tablet
 | `screenshots/phone-light-0*.png` | Phone screenshots, light theme (1080 × 2280), 7 shots including the .math Studio. |
 | `screenshots/phone-dark-0*.png` | Phone screenshots, dark theme (1440 × 3120), same 7 shots. |
 | `screenshots/phone-*-landscape-*.png` | Landscape phone captures (2280 × 1080 light, 3120 × 1440 dark) showing the two-pane layout. |
-| `screenshots/tablet-light-*.png` | Tablet captures (1600 × 2560 portrait, 2560 × 1600 landscape) of the 1.0.20 tablet shell. |
+| `screenshots/tablet-light-*.png` | Tablet captures (1600 × 2560 portrait, 2560 × 1600 landscape) of the 1.0.21 tablet shell. |
 | `../PRIVACY.md` | Privacy policy URL: <https://github.com/Amit2286658/MEP-Calc/blob/main/PRIVACY.md> |
 
 ## Listing fields
@@ -72,7 +72,11 @@ FEATURES
   rate table is cached so it also works offline.
 • Real-terms currency analysis: pick a From and To year and see how a currency
   actually appreciated or depreciated after inflation, using World Bank CPI data
-  (relative purchasing-power parity).
+  (relative purchasing-power parity). The Insert button writes a ready-made
+  inflation-adjusted conversion into the expression with your selections
+  prefilled.
+• The expression stays on screen after =, with the answer on the line below;
+  Ans reuses that answer and M+/M− keep working with it.
 • Math Studio: write and run your own .math modules with functions, units,
   structs and multi-file projects, right on the phone.
 • Searchable catalog of every function with its signature and description.
@@ -89,24 +93,25 @@ MEP Calc is open source. The engine is available at
 https://github.com/Amit2286658/Math-Engine-MEP
 ```
 
-## Version notes (build 1.0.20)
+## Version notes (build 1.0.21)
 
 ```
-• The Currency tab has been rebuilt around real-terms analysis. Pick a From and
-  To year under the two currency cards and the app shows whether the first
-  currency actually appreciated or depreciated against the second after
-  inflation — not just the raw exchange rate.
-• Results use World Bank consumer-price data for both economies (relative
-  purchasing-power parity), fetched once and cached for offline use. An
-  "Inflation data unavailable" note appears when a series is not published.
-• The exchange rate and its provider now sit in a slim pill on the left. The
-  numeric keypad moved behind the small keyboard button on the right and drops
-  down over the tab, so the currency cards and results have the whole screen.
-• The exact engine conversion call is still shown under the results, and the
-  same C11 engine computes the real-terms percentage through the new
-  [inflation] patch.
-• Tablets and both orientations are supported; the results pane scrolls on
-  short screens.
+• The Currency tab now has a dedicated Insert button below the results. It
+  writes a ready-made convert_real(amount, from, fromYear, to, toYear) call at
+  the cursor with your selected currencies and years already filled in, and
+  puts the cursor on the amount so you can type it straight away.
+• Changing a From/To currency or year after inserting updates the call in
+  place — the amount you typed is kept. convert_real converts between two
+  currencies and restates the result in the target year, adjusting both sides
+  for inflation with World Bank CPI data (relative purchasing-power parity).
+• The = key no longer replaces the expression with the answer: the expression
+  stays on the display and the result appears on the answer line below it.
+  Ans now inserts the numeric answer into the expression, and M+/M− keep
+  working with the evaluated answer.
+• The Currency mini-keypad now uses the same full-window frosted backdrop as
+  the function catalog, with the expression and answer displays kept sharp.
+• Tablets and both orientations are supported; the Currency action bar stays
+  reachable while the results scroll on short screens.
 ```
 
 ## Pre-upload checklist
@@ -121,6 +126,6 @@ https://github.com/Amit2286658/Math-Engine-MEP
    tablet shell in both orientations.
 3. Paste the short and full description above.
 4. Paste the privacy policy URL.
-5. Upload `ecalc-release-v20.apk` (signed, universal, from the
-   `ecalc-release-apk-v20` CI artifact) — **not** any `*-debug-*` or
+5. Upload `ecalc-release-v21.apk` (signed, universal, from the
+   `ecalc-release-apk-v21` CI artifact) — **not** any `*-debug-*` or
    `*CI-ONLY*` artifact.
