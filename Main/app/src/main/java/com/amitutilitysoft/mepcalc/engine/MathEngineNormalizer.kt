@@ -733,3 +733,28 @@ fun MathEngineManager.evaluateRealChangePct(
         onDone(value?.takeIf { !it.isNaN() && !it.isInfinite() })
     }
 }
+
+/** Monthly-precision overload calling `real_change_pct(base, quote, fromYear, fromMonth, toYear, toMonth)`. */
+fun MathEngineManager.evaluateRealChangePct(
+    baseCode: String,
+    quoteCode: String,
+    fromYear: Int,
+    fromMonth: Int,
+    toYear: Int,
+    toMonth: Int,
+    onDone: (Double?) -> Unit
+) {
+    val base = CurrencyConverter.normalizeCurrencyCode(baseCode)
+    val quote = CurrencyConverter.normalizeCurrencyCode(quoteCode)
+    val m0 = fromMonth.coerceIn(1, 12)
+    val m1 = toMonth.coerceIn(1, 12)
+    val engineCall = "real_change_pct(\"$base\", \"$quote\", $fromYear, $m0, $toYear, $m1)"
+    evaluate(engineCall) { outcome ->
+        val value = if (outcome.ok) {
+            outcome.value.trim().split(Regex("\\s+")).firstOrNull()?.toDoubleOrNull()
+        } else {
+            null
+        }
+        onDone(value?.takeIf { !it.isNaN() && !it.isInfinite() })
+    }
+}

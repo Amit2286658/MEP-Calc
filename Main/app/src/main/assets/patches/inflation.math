@@ -1,21 +1,25 @@
 # ==============================================================================
 # patches/inflation.math – Inflation & Real Currency Change (`[inflation]`)
 # ==============================================================================
-# Real-terms (relative PPP) currency analysis on top of the `[currency]` patch:
+# Real-terms (relative PPP) currency analysis on top of the `[currency]` patch.
+# Every function accepts either whole calendar years OR year + month pairs:
 #
-#   inflation("USD", 2015, 2025)          -> cumulative CPI inflation (fraction)
-#   inflation_pct("USD", 2015, 2025)      -> cumulative CPI inflation (percent)
-#   cpi_factor("USD", 2015, 2025)         -> price-level ratio CPI(2025)/CPI(2015)
-#   real_change("USD", "INR", 2015, 2025) -> real appreciation of USD vs INR
-#   real_change_pct(...)                  -> the same result in percent
-#   real_value(1000, "USD", 2015, 2025)   -> 2015 money expressed in 2025 money
-#   convert_real(1000, "USD", 2015, "INR", 2025)
-#                                         -> 2015 USD converted to 2025 INR,
-#                                            inflation-adjusted on both sides
+#   inflation("USD", 2015, 2025)                  -> cumulative CPI inflation (fraction)
+#   inflation("USD", 2015, 1, 2026, 10)           -> monthly-precision inflation (fraction)
+#   inflation_pct("USD", 2015, 1, 2026, 10)       -> cumulative CPI inflation (percent)
+#   cpi_factor("USD", 2015, 1, 2026, 10)          -> price-level ratio CPI(to)/CPI(from)
+#   real_change("USD", "INR", 2015, 1, 2026, 10)  -> real appreciation of USD vs INR
+#   real_change_pct(...)                          -> the same result in percent
+#   real_value(1000, "USD", 2015, 1, 2026, 10)    -> Jan 2015 money in Oct 2026 money
+#   convert_real(1000, "USD", 2015, 1, "INR", 2026, 10)
+#                                                 -> Jan 2015 USD converted to Oct 2026 INR,
+#                                                    inflation-adjusted on both sides
 #
-# The host app supplies the annual World Bank CPI series and backs the single
-# `@cpi_ratio(currency, from_year, to_year)` extern, which returns the
-# price-level ratio CPI(to)/CPI(from) or a negative sentinel when no CPI data is
+# The host app supplies the monthly IMF CPI index series (with World Bank annual
+# fallback when an economy is absent) and backs the single `@cpi_ratio(currency,
+# from_period, to_period)` extern. Periods are either a 4-digit calendar year
+# (`2015`) or a packed 6-digit year-month (`YYYY*100 + MM`, e.g. `201501`). The
+# extern returns CPI(to)/CPI(from) or a negative sentinel when no CPI data is
 # available. Nothing is hardcoded here: every number comes from that extern.
 #
 # Relative PPP: the real change of BASE versus QUOTE is
@@ -56,6 +60,39 @@ cpi_factor(currency:str, from_year:real, to_year:real) -> real = {
     r
 }
 
+# @desc Price-level ratio (CPI factor) between two year-month dates. Formula: cpi_factor(currency, y0, m0, y1, m1) = CPI(y1, m1) / CPI(y0, m0)
+# @param currency: str — ISO 4217 currency code whose economy's CPI is used (e.g. `"USD"`, `"INR"`)
+# @param from_year: real — Start calendar year
+# @param from_month: real — Start month (1–12)
+# @param to_year: real — End calendar year
+# @param to_month: real — End month (1–12)
+# @return real — Ratio of the CPI at `(to_year, to_month)` to the CPI at `(from_year, from_month)` (1.0 for the same month)
+cpi_factor(currency:str, from_year:real, from_month:real, to_year:real, to_month:real) -> real = {
+    y0 := round(from_year)
+    m0 := round(from_month)
+    y1 := round(to_year)
+    m1 := round(to_month)
+    if (y0 != from_year || y1 != to_year) {
+        error("cpi_factor(): years must be whole calendar years")
+    }
+    if (m0 != from_month || m1 != to_month || m0 < 1 || m0 > 12 || m1 < 1 || m1 > 12) {
+        error("cpi_factor(): months must be whole integers between 1 and 12")
+    }
+    p0 := y0 * 100 + m0
+    p1 := y1 * 100 + m1
+    if (p1 < p0) {
+        error("cpi_factor(): To date must be greater than or equal to the From date")
+    }
+    r := 1
+    if (p1 > p0) {
+        r = @cpi_ratio(currency, p0, p1)
+    }
+    if (r != r || r <= 0) {
+        error("Inflation data unavailable for '" + currency + "'. Connect to the internet and retry.")
+    }
+    r
+}
+
 # @desc Cumulative inflation over a year range as a decimal fraction (0.25 = 25%). Formula: inflation(currency, from, to) = cpi_factor(currency, from, to) - 1
 # @param currency: str — ISO 4217 currency code (e.g. `"USD"`)
 # @param from_year: real — Start year
@@ -64,6 +101,16 @@ cpi_factor(currency:str, from_year:real, to_year:real) -> real = {
 inflation(currency:str, from_year:real, to_year:real) -> real =
     cpi_factor(currency, from_year, to_year) - 1
 
+# @desc Cumulative inflation over a year-month range as a decimal fraction (0.25 = 25%).
+# @param currency: str — ISO 4217 currency code (e.g. `"USD"`)
+# @param from_year: real — Start year
+# @param from_month: real — Start month (1–12)
+# @param to_year: real — End year
+# @param to_month: real — End month (1–12)
+# @return real — Cumulative inflation as a fraction
+inflation(currency:str, from_year:real, from_month:real, to_year:real, to_month:real) -> real =
+    cpi_factor(currency, from_year, from_month, to_year, to_month) - 1
+
 # @desc Cumulative inflation over a year range in percent. Formula: inflation_pct(currency, from, to) = 100 * (cpi_factor(currency, from, to) - 1)
 # @param currency: str — ISO 4217 currency code
 # @param from_year: real — Start year
@@ -71,6 +118,16 @@ inflation(currency:str, from_year:real, to_year:real) -> real =
 # @return real — Cumulative inflation in percent
 inflation_pct(currency:str, from_year:real, to_year:real) -> real =
     inflation(currency, from_year, to_year) * 100
+
+# @desc Cumulative inflation over a year-month range in percent.
+# @param currency: str — ISO 4217 currency code
+# @param from_year: real — Start year
+# @param from_month: real — Start month (1–12)
+# @param to_year: real — End year
+# @param to_month: real — End month (1–12)
+# @return real — Cumulative inflation in percent
+inflation_pct(currency:str, from_year:real, from_month:real, to_year:real, to_month:real) -> real =
+    inflation(currency, from_year, from_month, to_year, to_month) * 100
 
 # ==============================================================================
 # 2. Real (inflation-adjusted) currency change (relative PPP)
@@ -88,6 +145,20 @@ real_change(base:str, quote:str, from_year:real, to_year:real) -> real = {
     fq / fb - 1
 }
 
+# @desc Real appreciation of `base` against `quote` over a year-month range, as a fraction.
+# @param base: str — ISO 4217 code of the currency being measured (e.g. `"USD"`)
+# @param quote: str — ISO 4217 code of the reference currency (e.g. `"INR"`)
+# @param from_year: real — Start year
+# @param from_month: real — Start month (1–12)
+# @param to_year: real — End year
+# @param to_month: real — End month (1–12)
+# @return real — Positive = `base` appreciated in real terms; negative = depreciated
+real_change(base:str, quote:str, from_year:real, from_month:real, to_year:real, to_month:real) -> real = {
+    fb := cpi_factor(base, from_year, from_month, to_year, to_month)
+    fq := cpi_factor(quote, from_year, from_month, to_year, to_month)
+    fq / fb - 1
+}
+
 # @desc Real appreciation of `base` against `quote` over a year range, in percent. Formula: real_change_pct(...) = 100 * real_change(...)
 # @param base: str — ISO 4217 code of the currency being measured
 # @param quote: str — ISO 4217 reference currency code
@@ -96,6 +167,17 @@ real_change(base:str, quote:str, from_year:real, to_year:real) -> real = {
 # @return real — Real change in percent
 real_change_pct(base:str, quote:str, from_year:real, to_year:real) -> real =
     real_change(base, quote, from_year, to_year) * 100
+
+# @desc Real appreciation of `base` against `quote` over a year-month range, in percent.
+# @param base: str — ISO 4217 code of the currency being measured
+# @param quote: str — ISO 4217 reference currency code
+# @param from_year: real — Start year
+# @param from_month: real — Start month (1–12)
+# @param to_year: real — End year
+# @param to_month: real — End month (1–12)
+# @return real — Real change in percent
+real_change_pct(base:str, quote:str, from_year:real, from_month:real, to_year:real, to_month:real) -> real =
+    real_change(base, quote, from_year, from_month, to_year, to_month) * 100
 
 # ==============================================================================
 # 3. Inflation-adjusted value
@@ -110,11 +192,22 @@ real_change_pct(base:str, quote:str, from_year:real, to_year:real) -> real =
 real_value(amount, currency:str, from_year:real, to_year:real) -> real =
     amount * cpi_factor(currency, from_year, to_year)
 
+# @desc Expresses an amount of `(from_year, from_month)` money in `(to_year, to_month)` money of the same currency.
+# @param amount: real — Amount in start-date money
+# @param currency: str — ISO 4217 currency code
+# @param from_year: real — Start year
+# @param from_month: real — Start month (1–12)
+# @param to_year: real — Target year
+# @param to_month: real — Target month (1–12)
+# @return real — Equivalent amount in target-date money (same purchasing power)
+real_value(amount, currency:str, from_year:real, from_month:real, to_year:real, to_month:real) -> real =
+    amount * cpi_factor(currency, from_year, from_month, to_year, to_month)
+
 # ==============================================================================
 # 4. Inflation-adjusted cross-currency conversion
 # ==============================================================================
 
-# @desc Converts an amount of `from_currency` in `from_year` into `to_currency` in `to_year`, adjusted for inflation in both economies (relative PPP). Formula: convert_real(amount, from, y0, to, y1) = amount * rate(from, to) * (CPI_to(y1)/CPI_to(latest)) / (CPI_from(y0)/CPI_from(latest)), where `latest` is the host's newest CPI observation (the reference year of the live exchange rate).
+# @desc Converts an amount of `from_currency` in `from_year` into `to_currency` in `to_year`, adjusted for inflation in both economies (relative PPP). Formula: convert_real(amount, from, y0, to, y1) = amount * rate(from, to) * (CPI_to(y1)/CPI_to(latest)) / (CPI_from(y0)/CPI_from(latest)), where `latest` is the host's newest CPI observation (the reference period of the live exchange rate).
 # @param amount: real — Amount in `from_currency` at `from_year`
 # @param from_currency: str — ISO 4217 source currency code (e.g. `"USD"`)
 # @param from_year: real — Whole calendar year the amount belongs to
@@ -128,8 +221,8 @@ convert_real(amount, from_currency:str, from_year:real, to_currency:str, to_year
         error("convert_real(): years must be whole calendar years")
     }
     # g(c, y) = CPI(c, y) / CPI(c, latest). The host snaps the sentinel 9999 to its
-    # newest reported year, so `1 / cpi_factor(c, y, 9999)` is exactly that ratio.
-    # Years after the newest observation collapse to 1.0 (no further inflation).
+    # newest reported observation, so `1 / cpi_factor(c, y, 9999)` is exactly that ratio.
+    # Dates after the newest observation collapse to 1.0 (no further inflation).
     g_from := 1 / cpi_factor(from_currency, y0, 9999)
     g_to := 1 / cpi_factor(to_currency, y1, 9999)
     rate := 1
@@ -140,6 +233,38 @@ convert_real(amount, from_currency:str, from_year:real, to_currency:str, to_year
         }
     }
     # Relative PPP: the real exchange rate is constant, so restate the live rate at
-    # the target year by dividing out the source price level and applying the target one.
+    # the target period by dividing out the source price level and applying the target one.
+    amount * rate * g_to / g_from
+}
+
+# @desc Converts an amount of `from_currency` at `(from_year, from_month)` into `to_currency` at `(to_year, to_month)`, adjusted for monthly inflation in both economies (relative PPP).
+# @param amount: real — Amount in `from_currency` at `(from_year, from_month)`
+# @param from_currency: str — ISO 4217 source currency code (e.g. `"USD"`)
+# @param from_year: real — Source calendar year
+# @param from_month: real — Source month (1–12)
+# @param to_currency: str — ISO 4217 target currency code (e.g. `"INR"`)
+# @param to_year: real — Target calendar year
+# @param to_month: real — Target month (1–12)
+# @return real — Equivalent amount in `to_currency` at `(to_year, to_month)`, with both sides adjusted for inflation
+convert_real(amount, from_currency:str, from_year:real, from_month:real, to_currency:str, to_year:real, to_month:real) -> real = {
+    y0 := round(from_year)
+    m0 := round(from_month)
+    y1 := round(to_year)
+    m1 := round(to_month)
+    if (y0 != from_year || y1 != to_year) {
+        error("convert_real(): years must be whole calendar years")
+    }
+    if (m0 != from_month || m1 != to_month || m0 < 1 || m0 > 12 || m1 < 1 || m1 > 12) {
+        error("convert_real(): months must be whole integers between 1 and 12")
+    }
+    g_from := 1 / cpi_factor(from_currency, y0, m0, 9999, 12)
+    g_to := 1 / cpi_factor(to_currency, y1, m1, 9999, 12)
+    rate := 1
+    if (from_currency != to_currency) {
+        rate = @currency_convert(from_currency, to_currency, 1)
+        if (rate != rate || rate <= 0) {
+            error("convert_real(): exchange rate unavailable for '" + from_currency + "' -> '" + to_currency + "'")
+        }
+    }
     amount * rate * g_to / g_from
 }

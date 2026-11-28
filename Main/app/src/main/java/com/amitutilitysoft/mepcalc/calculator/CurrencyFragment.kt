@@ -56,9 +56,13 @@ class CurrencyFragment : Fragment() {
     private var tvToName: TextView? = null
 
     private var fromYearCard: LinearLayout? = null
+    private var fromMonthCard: LinearLayout? = null
     private var toYearCard: LinearLayout? = null
+    private var toMonthCard: LinearLayout? = null
     private var tvFromYear: TextView? = null
+    private var tvFromMonth: TextView? = null
     private var tvToYear: TextView? = null
+    private var tvToMonth: TextView? = null
     private var tvYearArrow: TextView? = null
 
     private var resultsCard: LinearLayout? = null
@@ -86,8 +90,10 @@ class CurrencyFragment : Fragment() {
     private var fromCode: String = "USD"
     private var toCode: String = "INR"
 
-    private var fromYear: Int = 2015
-    private var toYear: Int = 2025
+    private var fromYear: Int = 2016
+    private var fromMonth: Int = 1
+    private var toYear: Int = 2026
+    private var toMonth: Int = 1
 
     /** Guards against stale async CPI/engine results after a fast pair or year change. */
     private var realTermsGeneration = 0
@@ -112,12 +118,23 @@ class CurrencyFragment : Fragment() {
         fromCode = prefs.getString("ccy_from", "USD") ?: "USD"
         toCode = prefs.getString("ccy_to", "INR") ?: "INR"
 
-        val thisYear = java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)
-        val defaultTo = (thisYear - 1).coerceAtLeast(1961)
-        val defaultFrom = (defaultTo - 10).coerceAtLeast(1961)
-        fromYear = prefs.getInt("ccy_year_from", defaultFrom).coerceIn(1960, thisYear)
-        toYear = prefs.getInt("ccy_year_to", defaultTo).coerceIn(1960, thisYear)
-        if (toYear < fromYear) toYear = fromYear
+        val nowCal = java.util.Calendar.getInstance()
+        val thisYear = nowCal.get(java.util.Calendar.YEAR)
+        val thisMonth = nowCal.get(java.util.Calendar.MONTH) + 1
+        // Default end date is the previous month (IMF monthly CPI lags by ~1 month).
+        val defaultToYear = if (thisMonth > 1) thisYear else (thisYear - 1).coerceAtLeast(1961)
+        val defaultToMonth = if (thisMonth > 1) thisMonth - 1 else 12
+        val defaultFromYear = (defaultToYear - 10).coerceAtLeast(1960)
+        val defaultFromMonth = defaultToMonth
+
+        fromYear = prefs.getInt("ccy_year_from", defaultFromYear).coerceIn(1960, thisYear)
+        fromMonth = prefs.getInt("ccy_month_from", defaultFromMonth).coerceIn(1, if (fromYear == thisYear) thisMonth else 12)
+        toYear = prefs.getInt("ccy_year_to", defaultToYear).coerceIn(1960, thisYear)
+        toMonth = prefs.getInt("ccy_month_to", defaultToMonth).coerceIn(1, if (toYear == thisYear) thisMonth else 12)
+        if (InflationProvider.packYearMonth(toYear, toMonth) < InflationProvider.packYearMonth(fromYear, fromMonth)) {
+            toYear = fromYear
+            toMonth = fromMonth
+        }
 
         val density = resources.displayMetrics.density
         val dp = { v: Float -> (v * density).toInt() }
@@ -250,7 +267,7 @@ class CurrencyFragment : Fragment() {
         pairRow.addView(toCard, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         content.addView(pairRow)
 
-        // 3. Year range selectors: real-terms appreciation/depreciation window.
+        // 3. Year + Month range selectors: real-terms appreciation/depreciation window.
         val yearRow = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -263,21 +280,57 @@ class CurrencyFragment : Fragment() {
                 bottomMargin = dp(6f)
             }
         }
-        fromYearCard = buildYearSelectorCard(ctx, dp, "FROM YEAR") { openYearPicker(isFrom = true) }.also { card ->
+        val fromPeriodGroup = LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        fromYearCard = buildPeriodSelectorCard(ctx, dp, "FROM YR") { openYearPicker(isFrom = true) }.also { card ->
             tvFromYear = card.getChildAt(1) as TextView
         }
-        toYearCard = buildYearSelectorCard(ctx, dp, "TO YEAR") { openYearPicker(isFrom = false) }.also { card ->
+        fromMonthCard = buildPeriodSelectorCard(ctx, dp, "MONTH") { openMonthPicker(isFrom = true) }.also { card ->
+            tvFromMonth = card.getChildAt(1) as TextView
+        }
+        fromPeriodGroup.addView(
+            fromYearCard,
+            LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.15f).apply {
+                marginEnd = dp(4f)
+            }
+        )
+        fromPeriodGroup.addView(
+            fromMonthCard,
+            LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 0.95f)
+        )
+
+        val toPeriodGroup = LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        toYearCard = buildPeriodSelectorCard(ctx, dp, "TO YR") { openYearPicker(isFrom = false) }.also { card ->
             tvToYear = card.getChildAt(1) as TextView
         }
+        toMonthCard = buildPeriodSelectorCard(ctx, dp, "MONTH") { openMonthPicker(isFrom = false) }.also { card ->
+            tvToMonth = card.getChildAt(1) as TextView
+        }
+        toPeriodGroup.addView(
+            toYearCard,
+            LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.15f).apply {
+                marginEnd = dp(4f)
+            }
+        )
+        toPeriodGroup.addView(
+            toMonthCard,
+            LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 0.95f)
+        )
+
         tvYearArrow = TextView(ctx).apply {
             text = "\u2192"
-            textSize = 15f
+            textSize = 14f
             gravity = Gravity.CENTER
-            layoutParams = LinearLayout.LayoutParams(dp(34f), LinearLayout.LayoutParams.WRAP_CONTENT)
+            layoutParams = LinearLayout.LayoutParams(dp(22f), LinearLayout.LayoutParams.WRAP_CONTENT)
         }
-        yearRow.addView(fromYearCard, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        yearRow.addView(fromPeriodGroup, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         yearRow.addView(tvYearArrow)
-        yearRow.addView(toYearCard, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        yearRow.addView(toPeriodGroup, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         content.addView(yearRow)
 
         // 4. Real-terms result card.
@@ -382,9 +435,9 @@ class CurrencyFragment : Fragment() {
             holdListener = { held ->
                 if (held) activity.showButtonPopup(
                     this,
-                    "Insert — places convert_real(amount, from, fromYear, to, toYear) at the cursor " +
-                        "with your selected currencies and years filled in. Changing a currency or " +
-                        "year afterwards updates the inserted call automatically."
+                    "Insert — places convert_real(amount, from, fromYear, fromMonth, to, toYear, toMonth) at the cursor " +
+                        "with your selected currencies, years, and months filled in. Changing a currency, year, or " +
+                        "month afterwards updates the inserted call automatically."
                 ) else activity.dismissButtonPopup()
             }
         }
@@ -415,7 +468,7 @@ class CurrencyFragment : Fragment() {
         root.addView(column)
 
         updatePairCards()
-        updateYearCards()
+        updatePeriodCards()
         applyTheme(activity.isDarkMode)
         updatePreviewAndRate()
         scheduleRealTermsRefresh(force = true)
@@ -464,7 +517,7 @@ class CurrencyFragment : Fragment() {
         }
     }
 
-    private fun buildYearSelectorCard(
+    private fun buildPeriodSelectorCard(
         ctx: Context,
         dp: (Float) -> Int,
         labelText: String,
@@ -472,20 +525,23 @@ class CurrencyFragment : Fragment() {
     ): LinearLayout {
         return LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(11f), dp(5f), dp(11f), dp(5f))
+            setPadding(dp(8f), dp(5f), dp(6f), dp(5f))
             isClickable = true
             isFocusable = true
             setOnClickListener { onClick() }
 
             addView(TextView(ctx).apply {
                 text = labelText
-                textSize = 9.5f
+                textSize = 8.5f
+                maxLines = 1
                 setTypeface(typeface, Typeface.BOLD)
-                letterSpacing = 0.08f
+                letterSpacing = 0.06f
             })
             addView(TextView(ctx).apply {
                 text = "—"
-                textSize = 18f
+                textSize = 15f
+                maxLines = 1
+                ellipsize = android.text.TextUtils.TruncateAt.END
                 setTypeface(typeface, Typeface.BOLD)
                 layoutParams = LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.WRAP_CONTENT,
@@ -495,17 +551,21 @@ class CurrencyFragment : Fragment() {
         }
     }
 
-    private fun saveYearPrefs(ctx: Context) {
+    private fun savePeriodPrefs(ctx: Context) {
         ctx.getSharedPreferences("mep_calc_prefs", Context.MODE_PRIVATE)
             .edit()
             .putInt("ccy_year_from", fromYear)
+            .putInt("ccy_month_from", fromMonth)
             .putInt("ccy_year_to", toYear)
+            .putInt("ccy_month_to", toMonth)
             .apply()
     }
 
-    private fun updateYearCards() {
-        tvFromYear?.text = fromYear.toString()
-        tvToYear?.text = toYear.toString()
+    private fun updatePeriodCards() {
+        tvFromYear?.text = "$fromYear \u25BE"
+        tvFromMonth?.text = "${InflationProvider.monthAbbrev(fromMonth)} \u25BE"
+        tvToYear?.text = "$toYear \u25BE"
+        tvToMonth?.text = "${InflationProvider.monthAbbrev(toMonth)} \u25BE"
     }
 
     private fun savePairPrefs(ctx: Context) {
@@ -562,7 +622,7 @@ class CurrencyFragment : Fragment() {
     // Insert: ready-made convert_real(...) call with selection-aware arguments
     // =========================================================================
 
-    private fun currentSelectionKey(): String = "$fromCode|$fromYear|$toCode|$toYear"
+    private fun currentSelectionKey(): String = "$fromCode|$fromYear|$fromMonth|$toCode|$toYear|$toMonth"
 
     /** True when the expression already contains an engine currency/inflation call. */
     private fun containsEngineCurrencyCall(expr: String): Boolean {
@@ -601,7 +661,7 @@ class CurrencyFragment : Fragment() {
         val prev = before.trimEnd().lastOrNull()
         val needsMul = prev != null && prev !in "+-×÷/*^,("
         val prefix = "convert_real("
-        val call = prefix + ", \"$fromCode\", $fromYear, \"$toCode\", $toYear)"
+        val call = prefix + ", \"$fromCode\", $fromYear, $fromMonth, \"$toCode\", $toYear, $toMonth)"
         val insertion = (if (needsMul) "×" else "") + call
 
         act.expressionText = before + insertion + after
@@ -695,7 +755,7 @@ class CurrencyFragment : Fragment() {
             i++
         }
         val amount = if (comma >= 0) text.substring(open, comma) else text.substring(open, close)
-        val newCall = "convert_real($amount, \"$fromCode\", $fromYear, \"$toCode\", $toYear)"
+        val newCall = "convert_real($amount, \"$fromCode\", $fromYear, $fromMonth, \"$toCode\", $toYear, $toMonth)"
         val oldLen = close + 1 - start
         val oldCursor = act.cursorPos
 
@@ -722,15 +782,17 @@ class CurrencyFragment : Fragment() {
     // Real-terms (inflation / relative PPP) panel
     // =========================================================================
 
-    /** Recomputes the real-terms card when the currency pair or year window changes. */
+    /** Recomputes the real-terms card when the currency pair or year/month window changes. */
     fun scheduleRealTermsRefresh(force: Boolean = false) {
-        val key = "$fromCode|$toCode|$fromYear|$toYear"
+        val fromYm = InflationProvider.packYearMonth(fromYear, fromMonth)
+        val toYm = InflationProvider.packYearMonth(toYear, toMonth)
+        val key = "$fromCode|$toCode|$fromYm|$toYm"
         if (!force && key == lastRealTermsKey) return
         lastRealTermsKey = key
         val gen = ++realTermsGeneration
 
-        if (fromYear >= toYear) {
-            renderRealTerms(0.0, fromYear, fromYear, 0.0, 0.0)
+        if (fromYm >= toYm) {
+            renderRealTerms(0.0, fromYm, fromYm, 0.0, 0.0)
             return
         }
 
@@ -739,45 +801,50 @@ class CurrencyFragment : Fragment() {
         tvInflationDetail?.text = ""
         tvDataStatus?.text = "${InflationProvider.SOURCE_LABEL} • fetching…"
 
-        InflationProvider.ensureDataAsync(listOf(fromCode, toCode), fromYear, toYear) { ok ->
+        InflationProvider.ensureDataAsync(listOf(fromCode, toCode), fromYm, toYm) { ok ->
             view?.post {
                 if (gen != realTermsGeneration || view == null) return@post
-                if (ok) computeRealTerms(gen) else renderInflationUnavailable()
+                if (ok) computeRealTerms(gen, fromYm, toYm) else renderInflationUnavailable()
             }
         }
     }
 
-    private fun computeRealTerms(gen: Int) {
-        val range = InflationProvider.resolvedRange(listOf(fromCode, toCode), fromYear, toYear)
+    private fun computeRealTerms(gen: Int, fromYm: Int, toYm: Int) {
+        val range = InflationProvider.resolvedRange(listOf(fromCode, toCode), fromYm, toYm)
         if (range == null) {
             renderInflationUnavailable()
             return
         }
-        val (ry0, ry1) = range
-        if (ry1 <= ry0) {
-            renderRealTerms(0.0, ry0, ry1, 0.0, 0.0)
+        val (rFromYm, rToYm) = range
+        if (rToYm <= rFromYm) {
+            renderRealTerms(0.0, rFromYm, rToYm, 0.0, 0.0)
             return
         }
-        val infFrom = InflationProvider.inflationPercent(fromCode, ry0, ry1)
-        val infTo = InflationProvider.inflationPercent(toCode, ry0, ry1)
+        val infFrom = InflationProvider.inflationPercent(fromCode, rFromYm, rToYm)
+        val infTo = InflationProvider.inflationPercent(toCode, rFromYm, rToYm)
+
+        val ry0 = InflationProvider.unpackYear(rFromYm)
+        val rm0 = InflationProvider.unpackMonth(rFromYm)
+        val ry1 = InflationProvider.unpackYear(rToYm)
+        val rm1 = InflationProvider.unpackMonth(rToYm)
 
         // Headline comes from the engine patch (`real_change_pct`), which calls the
         // `@cpi_ratio` extern for both economies. Fall back to the identical local
         // formula only when the patch is not linked yet (e.g. first launch offline).
-        MathEngineManager.evaluateRealChangePct(fromCode, toCode, ry0, ry1) { pct ->
+        MathEngineManager.evaluateRealChangePct(fromCode, toCode, ry0, rm0, ry1, rm1) { pct ->
             view?.post {
                 if (gen != realTermsGeneration || view == null) return@post
-                val value = pct ?: InflationProvider.realChangePercent(fromCode, toCode, ry0, ry1)
+                val value = pct ?: InflationProvider.realChangePercent(fromCode, toCode, rFromYm, rToYm)
                 if (value.isNaN()) renderInflationUnavailable()
-                else renderRealTerms(value, ry0, ry1, infFrom, infTo)
+                else renderRealTerms(value, rFromYm, rToYm, infFrom, infTo)
             }
         }
     }
 
     private fun renderRealTerms(
         pct: Double,
-        fromY: Int,
-        toY: Int,
+        fromYm: Int,
+        toYm: Int,
         infFromPct: Double,
         infToPct: Double
     ) {
@@ -795,10 +862,13 @@ class CurrencyFragment : Fragment() {
         }
         tvRealCaption?.text = "$fromCode $verb vs $toCode in real terms"
 
-        val period = if (fromY == toY) "$fromY" else "$fromY→$toY"
+        val startLabel = InflationProvider.formatYearMonth(fromYm)
+        val endLabel = InflationProvider.formatYearMonth(toYm)
+        val period = if (fromYm == toYm) startLabel else "$startLabel→$endLabel"
         tvInflationDetail?.text =
             "Inflation $period • $fromCode ${fmtPct(infFromPct)} • $toCode ${fmtPct(infToPct)}"
-        tvDataStatus?.text = "${InflationProvider.SOURCE_LABEL} • relative PPP"
+        val sourceLabel = InflationProvider.sourceLabelFor(listOf(fromCode, toCode))
+        tvDataStatus?.text = "$sourceLabel • relative PPP"
     }
 
     private fun renderInflationUnavailable() {
@@ -839,7 +909,7 @@ class CurrencyFragment : Fragment() {
             setStroke(strokePx, cardStroke)
         }
 
-        listOf(fromCard, toCard, fromYearCard, toYearCard).forEach { card ->
+        listOf(fromCard, toCard, fromYearCard, fromMonthCard, toYearCard, toMonthCard).forEach { card ->
             card?.background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
                 cornerRadius = 10f * density
@@ -854,8 +924,8 @@ class CurrencyFragment : Fragment() {
         tvFromName?.setTextColor(secondaryText)
         tvToName?.setTextColor(secondaryText)
 
-        // Year selector labels + values (child 0 = label, child 1 = value).
-        listOf(fromYearCard, toYearCard).forEach { card ->
+        // Year & Month selector labels + values (child 0 = label, child 1 = value).
+        listOf(fromYearCard, fromMonthCard, toYearCard, toMonthCard).forEach { card ->
             (card?.getChildAt(0) as? TextView)?.setTextColor(accentColor)
             (card?.getChildAt(1) as? TextView)?.setTextColor(primaryText)
         }
@@ -1331,17 +1401,245 @@ class CurrencyFragment : Fragment() {
         }
     }
 
+    private fun openMonthPicker(isFrom: Boolean) {
+        removePickerImmediately()
+        val act = activity as? MainActivity ?: return
+        val root = act.binding.rootFrame
+        val dark = act.isDarkMode
+        val density = resources.displayMetrics.density
+        val dp = { v: Float -> (v * density).toInt() }
+
+        val cardBg = Color.parseColor(if (dark) "#222528" else "#FFFFFF")
+        val itemBg = Color.parseColor(if (dark) "#2A2E32" else "#F3F3F3")
+        val strokeColor = Color.parseColor(if (dark) "#34393F" else "#DCDCDC")
+        val primaryText = Color.parseColor(if (dark) "#E6EBF0" else "#333333")
+        val secondaryText = Color.parseColor(if (dark) "#8B95A0" else "#666666")
+        val accentColor = Color.parseColor(if (dark) "#13959B" else "#E58A7B")
+
+        val frostBmp = Frost.frozenBackdrop(root, downscale = 6, radius = 8)
+        val overlay = FrameLayout(act).apply {
+            elevation = 40f * density
+            isClickable = true
+            isFocusable = true
+            setOnClickListener { dismissPicker() }
+        }
+        if (frostBmp != null) {
+            overlay.addView(ImageView(act).apply {
+                setImageBitmap(frostBmp)
+                scaleType = ImageView.ScaleType.FIT_XY
+                alpha = 0.92f
+            }, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        }
+        overlay.addView(View(act).apply {
+            setBackgroundColor(Color.parseColor(if (dark) "#88101214" else "#77EAEAEA"))
+        }, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+
+        val modal = LinearLayout(act).apply {
+            orientation = LinearLayout.VERTICAL
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                cornerRadius = 16f * density
+                setColor(cardBg)
+                setStroke(dp(1.2f), accentColor)
+            }
+            setPadding(dp(14f), dp(14f), dp(14f), dp(14f))
+            isClickable = true
+            isFocusable = true
+            setOnClickListener { }
+        }
+
+        val activeYear = if (isFrom) fromYear else toYear
+        modal.addView(TextView(act).apply {
+            text = if (isFrom) "Real terms — From month ($activeYear)" else "Real terms — To month ($activeYear)"
+            textSize = 15f
+            setTypeface(typeface, Typeface.BOLD)
+            setTextColor(primaryText)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+        })
+        modal.addView(TextView(act).apply {
+            text = if (isFrom) "Start month of the inflation comparison window"
+            else "End month of the inflation comparison window"
+            textSize = 11.5f
+            setTextColor(secondaryText)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                topMargin = dp(2f)
+                bottomMargin = dp(10f)
+            }
+        })
+
+        val nowCal = java.util.Calendar.getInstance()
+        val thisYear = nowCal.get(java.util.Calendar.YEAR)
+        val thisMonth = nowCal.get(java.util.Calendar.MONTH) + 1
+        val maxMonth = if (activeYear >= thisYear) thisMonth else 12
+        val monthNames = arrayOf(
+            "January", "February", "March", "April", "May", "June",
+            "July", "August", "September", "October", "November", "December"
+        )
+        val months = (1..maxMonth).toList()
+        val selected = if (isFrom) fromMonth else toMonth
+
+        val rv = RecyclerView(act).apply {
+            layoutManager = LinearLayoutManager(act)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                0,
+                1f
+            )
+        }
+        rv.adapter = object : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
+            override fun getItemCount(): Int = months.size
+
+            override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
+                val tv = TextView(parent.context).apply {
+                    textSize = 15f
+                    gravity = Gravity.CENTER_VERTICAL
+                    setPadding(dp(14f), dp(11f), dp(14f), dp(11f))
+                    layoutParams = RecyclerView.LayoutParams(
+                        RecyclerView.LayoutParams.MATCH_PARENT,
+                        RecyclerView.LayoutParams.WRAP_CONTENT
+                    ).apply { bottomMargin = dp(6f) }
+                }
+                return object : RecyclerView.ViewHolder(tv) {}
+            }
+
+            override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
+                val month = months[position]
+                val tv = holder.itemView as TextView
+                val isSel = month == selected
+                val label = String.format(Locale.US, "%02d  %s", month, monthNames[month - 1])
+                tv.text = if (isSel) "$label   ✓" else label
+                tv.setTypeface(tv.typeface, if (isSel) Typeface.BOLD else Typeface.NORMAL)
+                tv.setTextColor(if (isSel) accentColor else primaryText)
+                tv.background = GradientDrawable().apply {
+                    shape = GradientDrawable.RECTANGLE
+                    cornerRadius = 8f * density
+                    setColor(itemBg)
+                    setStroke(dp(1f), if (isSel) accentColor else strokeColor)
+                }
+                tv.setOnClickListener {
+                    onMonthSelected(isFrom, month)
+                    dismissPicker()
+                }
+            }
+        }
+        modal.addView(rv)
+
+        val modalW = minOf(root.width - dp(32f), dp(340f)).coerceAtLeast(dp(240f))
+        val modalH = (root.height * 0.62f).toInt()
+            .coerceIn(dp(260f), (root.height - dp(24f)).coerceAtLeast(dp(260f)))
+        overlay.addView(modal, FrameLayout.LayoutParams(modalW, modalH, Gravity.CENTER))
+        root.addView(
+            overlay,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+        )
+        pickerOverlay = overlay
+        pickerModal = modal
+        pickerList = rv
+        pickerClosing = false
+
+        overlay.alpha = 0f
+        overlay.animate().alpha(1f).setDuration(180L)
+            .setInterpolator(DecelerateInterpolator()).start()
+        modal.scaleX = 0.84f
+        modal.scaleY = 0.84f
+        modal.alpha = 0f
+        modal.translationY = dp(14f).toFloat()
+        pickerAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = 460L
+            interpolator = LinearInterpolator()
+            addUpdateListener { anim ->
+                val f = anim.animatedValue as Float
+                val step = springStep(f)
+                val scale = 0.84f + 0.16f * step
+                modal.scaleX = scale
+                modal.scaleY = scale
+                modal.alpha = (f * 3f).coerceAtMost(1f)
+                modal.translationY = dp(14f) * (1f - step)
+            }
+            addListener(object : AnimatorListenerAdapter() {
+                override fun onAnimationEnd(animation: Animator) {
+                    if (animation === pickerAnimator) pickerAnimator = null
+                    if (pickerClosing) return
+                    modal.scaleX = 1f
+                    modal.scaleY = 1f
+                    modal.alpha = 1f
+                    modal.translationY = 0f
+                }
+            })
+            start()
+        }
+        rv.post {
+            if (!isAdded || pickerOverlay !== overlay) return@post
+            val visible = minOf(rv.childCount, 12)
+            for (i in 0 until visible) {
+                val row = rv.getChildAt(i) ?: continue
+                row.alpha = 0f
+                row.translationX = dp(18f).toFloat()
+                row.scaleX = 0.97f
+                row.scaleY = 0.97f
+                row.animate()
+                    .alpha(1f).translationX(0f).scaleX(1f).scaleY(1f)
+                    .setStartDelay(120L + i * 20L)
+                    .setDuration(280L)
+                    .setInterpolator(DecelerateInterpolator())
+                    .start()
+            }
+        }
+    }
+
     private fun onYearSelected(isFrom: Boolean, year: Int) {
+        val nowCal = java.util.Calendar.getInstance()
+        val thisYear = nowCal.get(java.util.Calendar.YEAR)
+        val thisMonth = nowCal.get(java.util.Calendar.MONTH) + 1
         if (isFrom) {
             fromYear = year
-            if (toYear < fromYear) toYear = fromYear
+            if (fromYear == thisYear && fromMonth > thisMonth) fromMonth = thisMonth
+            if (InflationProvider.packYearMonth(toYear, toMonth) < InflationProvider.packYearMonth(fromYear, fromMonth)) {
+                toYear = fromYear
+                toMonth = fromMonth
+            }
         } else {
             toYear = year
-            if (fromYear > toYear) fromYear = toYear
+            if (toYear == thisYear && toMonth > thisMonth) toMonth = thisMonth
+            if (InflationProvider.packYearMonth(fromYear, fromMonth) > InflationProvider.packYearMonth(toYear, toMonth)) {
+                fromYear = toYear
+                fromMonth = toMonth
+            }
         }
-        context?.let { saveYearPrefs(it) }
+        context?.let { savePeriodPrefs(it) }
         syncInsertedRealCall()
-        updateYearCards()
+        updatePeriodCards()
+        updatePreviewAndRate()
+        scheduleRealTermsRefresh(force = true)
+    }
+
+    private fun onMonthSelected(isFrom: Boolean, month: Int) {
+        val m = month.coerceIn(1, 12)
+        if (isFrom) {
+            fromMonth = m
+            if (InflationProvider.packYearMonth(toYear, toMonth) < InflationProvider.packYearMonth(fromYear, fromMonth)) {
+                toYear = fromYear
+                toMonth = fromMonth
+            }
+        } else {
+            toMonth = m
+            if (InflationProvider.packYearMonth(fromYear, fromMonth) > InflationProvider.packYearMonth(toYear, toMonth)) {
+                fromYear = toYear
+                fromMonth = toMonth
+            }
+        }
+        context?.let { savePeriodPrefs(it) }
+        syncInsertedRealCall()
+        updatePeriodCards()
         updatePreviewAndRate()
         scheduleRealTermsRefresh(force = true)
     }
